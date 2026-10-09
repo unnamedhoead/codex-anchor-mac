@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codex Warmup</title>
+<style>
+  :root {
+    --bg: #f7f7f8; --card: #fff; --fg: #1a1a1a; --muted: #6b6b70;
+    --line: #e3e3e6; --accent: #2b6cb0; --ok: #1a7f4b; --bad: #b42318;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17171a; --card: #202024; --fg: #ececee; --muted: #9a9aa2;
+      --line: #32323a; --accent: #6ba4e0; --ok: #4ec98a; --bad: #f0806e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17171a; --card: #202024; --fg: #ececee; --muted: #9a9aa2;
+    --line: #32323a; --accent: #6ba4e0; --ok: #4ec98a; --bad: #f0806e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 16px; background: var(--bg); color: var(--fg);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 20px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin: 0 0 14px; font-weight: 600; }
+  .big { font-family: var(--mono); font-size: 34px; font-weight: 600; letter-spacing: .02em; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  .kv .k { color: var(--muted); font-size: 12px; }
+  .kv .v { font-family: var(--mono); font-size: 14px; word-break: break-all; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  input[type=time] {
+    font: 600 20px var(--mono); padding: 7px 10px; border-radius: 7px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+  }
+  button {
+    font: 500 14px inherit; padding: 8px 15px; border-radius: 7px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card); color: var(--fg);
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover:not(:disabled) { color: #fff; opacity: .9; }
+  button.danger:hover:not(:disabled) { border-color: var(--bad); color: var(--bad); }
+  pre {
+    font-family: var(--mono); font-size: 12px; line-height: 1.7; margin: 0;
+    white-space: pre-wrap; word-break: break-all; max-height: 320px; overflow: auto;
+    color: var(--muted);
+  }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  .note { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  #steps { margin-top: 12px; font-size: 13px; }
+  #steps div { padding: 3px 0; font-family: var(--mono); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Codex Warmup</h1>
+  <p class="sub">每天定时发一次极小的请求，把 5 小时额度窗口锚定在你需要的位置</p>
+
+  <div class="card">
+    <h2>下次触发</h2>
+    <div class="big" id="time">--:--</div>
+    <div class="grid" style="margin-top:16px">
+      <div class="kv"><div class="k">任务状态</div><div class="v" id="state">…</div></div>
+      <div class="kv"><div class="k">pmset 唤醒</div><div class="v" id="wake">…</div></div>
+      <div class="kv"><div class="k">应为</div><div class="v" id="expected">…</div></div>
+    </div>
+    <p class="note" id="warn"></p>
+  </div>
+
+  <div class="card">
+    <h2>修改时间</h2>
+    <div class="row">
+      <input type="time" id="picker">
+      <button class="primary" id="save">保存</button>
+      <span class="note" style="margin:0">pmset 唤醒会自动设为提前 3 分钟</span>
+    </div>
+    <div id="steps"></div>
+  </div>
+
+  <div class="card">
+    <h2>控制</h2>
+    <div class="row">
+      <button id="toggle">…</button>
+      <button class="danger" id="runnow">立即跑一次</button>
+      <span class="note" style="margin:0">立即跑会当场开一个 5 小时窗口</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>最近运行</h2>
+    <pre id="log">加载中…</pre>
+  </div>
+</div>
+
+<script>
+let st = null;
+
+const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+async function api(path, body) {
+  const r = await fetch(path, body ? {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  } : undefined);
+  return r.json();
+}
+
+function render(s) {
+  st = s;
+  document.getElementById('time').textContent = s.time || '未配置';
+  document.getElementById('state').textContent = s.state;
+  document.getElementById('state').className = 'v ' + (s.loaded ? 'ok' : 'bad');
+  document.getElementById('wake').textContent = s.pmsetWake;
+  document.getElementById('expected').textContent = s.expectedWake || '-';
+  if (s.time && !document.getElementById('picker').value) {
+    document.getElementById('picker').value = s.time;
+  }
+  const warn = document.getElementById('warn');
+  const w = (s.pmsetWake || '').replace(/(AM|PM)$/i, '').trim();
+  const mismatch = s.expectedWake && !matches(w, s.expectedWake);
+  warn.textContent = mismatch
+    ? '⚠️ pmset 唤醒时间与触发时间不匹配，没插电的夜里可能错过触发'
+    : '';
+  warn.className = 'note bad';
+  const t = document.getElementById('toggle');
+  t.textContent = s.loaded ? '停用' : '启用';
+  document.getElementById('log').textContent = s.runs.length
+    ? s.runs.join('\n') : '（暂无记录）';
+}
+
+// pmset prints 4:27AM; the panel stores 04:27.
+function matches(pmset, expected) {
+  const m = pmset.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return false;
+  const [, h, mi] = m;
+  return String(h).padStart(2, '0') + ':' + mi === expected;
+}
+
+async function refresh() { render(await api('/api/status')); }
+
+document.getElementById('save').onclick = async (e) => {
+  const v = document.getElementById('picker').value;
+  if (!v) return;
+  const [hour, minute] = v.split(':').map(Number);
+  e.target.disabled = true;
+  const res = await api('/api/time', {hour, minute});
+  e.target.disabled = false;
+  const box = document.getElementById('steps');
+  box.innerHTML = (res.steps || []).map(s =>
+    `<div class="${s.ok ? 'ok' : 'bad'}">${s.ok ? '✓' : '✗'} ${esc(s.step)}` +
+    `${s.detail ? ' — ' + esc(s.detail) : ''}</div>`).join('')
+    || `<div class="bad">${esc(res.error || '未知错误')}</div>`;
+  if (res.status) render(res.status);
+};
+
+document.getElementById('toggle').onclick = async (e) => {
+  e.target.disabled = true;
+  const res = await api('/api/toggle', {enable: !st.loaded});
+  e.target.disabled = false;
+  if (res.status) render(res.status);
+};
+
+document.getElementById('runnow').onclick = async (e) => {
+  if (!confirm('立即发一次真实请求？这会当场开启一个 5 小时窗口。')) return;
+  e.target.disabled = true;
+  await api('/api/run', {});
+  setTimeout(() => { e.target.disabled = false; refresh(); }, 4000);
+};
+
+refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>

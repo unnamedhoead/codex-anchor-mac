@@ -1,0 +1,5 @@
+# Lets the warmup control panel keep the pmset wake in sync with the launchd
+# trigger without prompting. Scoped to exactly that one pmset subcommand --
+# it cannot run pmset with any other arguments, nor any other binary.
+# Install with: sudo install -m 0440 -o root -g wheel sudoers.codex-warmup /etc/sudoers.d/codex-warmup
+hoead ALL=(root) NOPASSWD: /usr/bin/pmset repeat wake MTWRFSU [0-2][0-9]\:[0-5][0-9]\:00

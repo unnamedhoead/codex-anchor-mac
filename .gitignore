@@ -1,0 +1,13 @@
+# runtime artifacts, not source
+warmup.log
+launchd.out.log
+launchd.err.log
+ui.out.log
+ui.err.log
+.warmup.lock/
+.stub-codex
+.stub2
+*.bak
+.DS_Store
+__pycache__/
+*.pyc
