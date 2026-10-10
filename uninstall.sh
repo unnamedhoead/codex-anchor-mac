@@ -2,7 +2,7 @@
 # Remove everything install.sh created, including the pmset wake schedule.
 set -uo pipefail
 
-LABEL="com.hoead.codex-warmup"
+LABEL="io.github.codex-warmup"
 TARGET="$HOME/Library/LaunchAgents/$LABEL.plist"
 
 echo "==> unloading the LaunchAgent"

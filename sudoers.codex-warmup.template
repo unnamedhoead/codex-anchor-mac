@@ -1,0 +1,7 @@
+# Lets the warmup control panel keep the pmset wake schedule in sync with the
+# launchd trigger without prompting for a password. Scoped to exactly that one
+# pmset subcommand: it cannot run pmset with any other arguments, nor any
+# other binary.
+#
+# install-ui.sh renders __USER__ and installs this for you.
+__USER__ ALL=(root) NOPASSWD: /usr/bin/pmset repeat wake MTWRFSU [0-2][0-9]\:[0-5][0-9]\:00

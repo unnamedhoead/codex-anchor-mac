@@ -4,7 +4,7 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LABEL="com.hoead.codex-warmup"
+LABEL="io.github.codex-warmup"
 TEMPLATE="$DIR/$LABEL.plist"
 TARGET="$HOME/Library/LaunchAgents/$LABEL.plist"
 WAKE_TIME="04:27:00"
@@ -35,15 +35,32 @@ launchctl bootstrap "gui/$UID" "$TARGET"
 launchctl enable "gui/$UID/$LABEL"
 
 echo
-echo "==> scheduling a daily wake at $WAKE_TIME (needs sudo)"
-# pmset holds exactly one repeating schedule, so show what is there first.
-if pmset -g sched | grep -qi 'Repeating power events'; then
-  echo "    WARNING: a repeating power event already exists and will be replaced:"
-  pmset -g sched | sed -n '/Repeating power events/,$p' | sed 's/^/    /'
-  read -r -p "    Continue? [y/N] " ans
-  [ "$ans" = "y" ] || { echo "    skipped pmset; the agent will only fire if the Mac is already awake."; exit 0; }
+echo "==> optional: daily wake at $WAKE_TIME"
+echo "    launchd cannot wake a sleeping Mac, so without this the job is late"
+echo "    (or skipped) on nights the Mac is not plugged in. Plugged-in users"
+echo "    with sleep disabled on AC do not need it."
+echo
+
+# Authorization Services rather than sudo: works without a terminal, shows the
+# standard macOS prompt, and supports Touch ID. One prompt covers both changes.
+ADMIN_SCRIPT="/usr/bin/pmset repeat wake MTWRFSU $WAKE_TIME"
+if [ "${WARMUP_INSTALL_SUDOERS:-1}" = "1" ]; then
+  RENDERED="$DIR/.sudoers.rendered"
+  sed "s|__USER__|$(id -un)|g" "$DIR/sudoers.codex-warmup.template" >"$RENDERED"
+  chmod 0600 "$RENDERED"
+  # Letting the panel change the wake time later needs a narrow NOPASSWD rule.
+  ADMIN_SCRIPT="$ADMIN_SCRIPT && /usr/bin/install -m 0440 -o root -g wheel '$RENDERED' /etc/sudoers.d/codex-warmup"
 fi
-sudo pmset repeat wake MTWRFSU "$WAKE_TIME"
+
+if sudo -n pmset repeat wake MTWRFSU "$WAKE_TIME" 2>/dev/null; then
+  echo "    done (sudoers rule already in place)"
+elif osascript -e "do shell script \"$ADMIN_SCRIPT\" with administrator privileges with prompt \"codex-quota-warmup needs to schedule a daily wake\"" >/dev/null 2>&1; then
+  echo "    done"
+else
+  echo "    SKIPPED (cancelled or failed). The warmup still runs; it will just"
+  echo "    be late on battery nights. To enable it later, re-run ./install.sh"
+fi
+rm -f "$DIR/.sudoers.rendered"
 
 echo
 echo "==> done. current state:"

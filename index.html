@@ -75,6 +75,8 @@
       <div class="kv"><div class="k">任务状态</div><div class="v" id="state">…</div></div>
       <div class="kv"><div class="k">pmset 唤醒</div><div class="v" id="wake">…</div></div>
       <div class="kv"><div class="k">应为</div><div class="v" id="expected">…</div></div>
+      <div class="kv"><div class="k">时区</div><div class="v" id="tz">…</div></div>
+      <div class="kv"><div class="k">系统时钟</div><div class="v" id="localtime">…</div></div>
     </div>
     <p class="note" id="warn"></p>
   </div>
@@ -82,10 +84,12 @@
   <div class="card">
     <h2>修改时间</h2>
     <div class="row">
+      <select id="tzpick" style="font:14px var(--mono);padding:8px 10px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg);max-width:230px"></select>
       <input type="time" id="picker">
       <button class="primary" id="save">保存</button>
-      <span class="note" style="margin:0">pmset 唤醒会自动设为提前 3 分钟</span>
     </div>
+    <p class="note">时间按所选时区解释，再换算成 launchd 认得的系统本地时间。
+      pmset 唤醒自动设为提前 3 分钟。</p>
     <div id="steps"></div>
   </div>
 
@@ -124,13 +128,23 @@ function render(s) {
   document.getElementById('state').className = 'v ' + (s.loaded ? 'ok' : 'bad');
   document.getElementById('wake').textContent = s.pmsetWake;
   document.getElementById('expected').textContent = s.expectedWake || '-';
+  document.getElementById('tz').textContent = s.timezone;
+  document.getElementById('localtime').textContent =
+    s.sameClock ? '与所选时区相同' : `${s.localTime} (${s.systemTimezone})`;
+  const sel = document.getElementById('tzpick');
+  if (!sel.options.length) {
+    sel.innerHTML = s.timezones.map(t =>
+      `<option value="${t}"${t === s.timezone ? ' selected' : ''}>${t}</option>`).join('');
+  }
   if (s.time && !document.getElementById('picker').value) {
     document.getElementById('picker').value = s.time;
   }
   const warn = document.getElementById('warn');
   const w = (s.pmsetWake || '').replace(/(AM|PM)$/i, '').trim();
   const mismatch = s.expectedWake && !matches(w, s.expectedWake);
-  warn.textContent = mismatch
+  warn.textContent = s.drifted
+    ? `⚠️ 系统时区已变为 ${s.systemTimezone}，但计划是按 ${s.timezone} 算的。点「保存」重新同步。`
+    : mismatch
     ? '⚠️ pmset 唤醒时间与触发时间不匹配，没插电的夜里可能错过触发'
     : '';
   warn.className = 'note bad';
@@ -155,7 +169,8 @@ document.getElementById('save').onclick = async (e) => {
   if (!v) return;
   const [hour, minute] = v.split(':').map(Number);
   e.target.disabled = true;
-  const res = await api('/api/time', {hour, minute});
+  const res = await api('/api/time',
+    {hour, minute, timezone: document.getElementById('tzpick').value});
   e.target.disabled = false;
   const box = document.getElementById('steps');
   box.innerHTML = (res.steps || []).map(s =>

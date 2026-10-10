@@ -13,17 +13,20 @@ import pathlib
 import plistlib
 import re
 import subprocess
+from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from zoneinfo import ZoneInfo, available_timezones
 
 PORT = 7788
 BIND = "127.0.0.1"
-LABEL = "com.hoead.codex-warmup"
+LABEL = "io.github.codex-warmup"
 DIR = pathlib.Path(__file__).resolve().parent
 TEMPLATE = DIR / f"{LABEL}.plist"
 INSTALL_SH = DIR / "install.sh"
 LOG = DIR / "warmup.log"
 INSTALLED = pathlib.Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 INDEX = DIR / "index.html"
+CONFIG = DIR / "config.json"
 UID = os.getuid()
 SERVICE = f"gui/{UID}/{LABEL}"
 
@@ -42,6 +45,64 @@ def run(cmd: list[str]) -> tuple[int, str]:
     except Exception as exc:  # noqa: BLE001 - surfaced to the UI verbatim
         return 1, f"{type(exc).__name__}: {exc}"
     return p.returncode, (p.stdout + p.stderr).strip()
+
+
+def system_timezone() -> str:
+    """The IANA name macOS is currently using, e.g. Asia/Shanghai."""
+    try:
+        link = os.readlink("/etc/localtime")
+    except OSError:
+        return "UTC"
+    # /var/db/timezone/zoneinfo/Asia/Shanghai -> Asia/Shanghai
+    parts = link.split("zoneinfo/", 1)
+    return parts[1] if len(parts) == 2 else "UTC"
+
+
+def load_config() -> dict:
+    try:
+        cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
+    except Exception:
+        cfg = {}
+    # A null timezone means "whatever this Mac is set to" -- the right default
+    # for anyone who clones this, rather than inheriting the author's zone.
+    if not cfg.get("timezone"):
+        cfg["timezone"] = system_timezone()
+    cfg.setdefault("hour", 4)
+    cfg.setdefault("minute", 30)
+    cfg.setdefault("computedUnderSystemTimezone", cfg["timezone"])
+    if not CONFIG.exists():
+        save_config(cfg)
+    return cfg
+
+
+def save_config(cfg: dict) -> None:
+    CONFIG.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n",
+                      encoding="utf-8")
+
+
+def to_local(hour: int, minute: int, tz_name: str) -> tuple[int, int]:
+    """Convert a wall-clock time in tz_name into the system's local clock.
+
+    launchd only understands the system's local time, so a user who picks a
+    timezone other than their system's needs the conversion done here. Anchored
+    on the next occurrence rather than today so a DST shift resolves the way
+    the next run actually will.
+    """
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        return hour, minute
+    local_now = datetime.now().astimezone()
+    candidate = datetime.now(tz).replace(hour=hour, minute=minute,
+                                         second=0, microsecond=0)
+    if candidate <= datetime.now(tz):
+        candidate += timedelta(days=1)
+    local = candidate.astimezone(local_now.tzinfo)
+    return local.hour, local.minute
+
+
+def timezone_drifted(cfg: dict) -> bool:
+    return cfg.get("computedUnderSystemTimezone") != system_timezone()
 
 
 def read_schedule() -> tuple[int | None, int | None]:
@@ -88,23 +149,36 @@ def recent_runs(limit: int = 15) -> list[str]:
 
 
 def status() -> dict:
-    hour, minute = read_schedule()
+    cfg = load_config()
+    local_hour, local_minute = read_schedule()
     loaded, state = agent_loaded()
-    wh, wm = wake_time(hour, minute) if hour is not None else (None, None)
+    wh, wm = wake_time(local_hour, local_minute) if local_hour is not None else (None, None)
+    sys_tz = system_timezone()
     return {
-        "hour": hour,
-        "minute": minute,
-        "time": f"{hour:02d}:{minute:02d}" if hour is not None else None,
+        "timezone": cfg["timezone"],
+        "systemTimezone": sys_tz,
+        "hour": cfg["hour"],
+        "minute": cfg["minute"],
+        # What the user asked for, in their chosen timezone.
+        "time": f"{cfg['hour']:02d}:{cfg['minute']:02d}",
+        # What launchd will actually honour, on the system clock.
+        "localTime": (f"{local_hour:02d}:{local_minute:02d}"
+                      if local_hour is not None else None),
+        "sameClock": cfg["timezone"] == sys_tz,
+        "drifted": timezone_drifted(cfg),
         "loaded": loaded,
         "state": state,
         "pmsetWake": pmset_wake(),
         "expectedWake": f"{wh:02d}:{wm:02d}" if wh is not None else None,
         "runs": recent_runs(),
+        "timezones": sorted(available_timezones()),
     }
 
 
-def set_schedule(hour: int, minute: int) -> list[dict]:
+def set_schedule(hour: int, minute: int, tz_name: str) -> list[dict]:
+    """hour/minute are wall-clock in tz_name; launchd gets the local equivalent."""
     steps: list[dict] = []
+    local_hour, local_minute = to_local(hour, minute, tz_name)
 
     def step(name: str, ok: bool, detail: str = "") -> None:
         steps.append({"step": name, "ok": ok, "detail": detail})
@@ -112,10 +186,11 @@ def set_schedule(hour: int, minute: int) -> list[dict]:
     try:
         with INSTALLED.open("rb") as fh:
             data = plistlib.load(fh)
-        data["StartCalendarInterval"] = {"Hour": hour, "Minute": minute}
+        data["StartCalendarInterval"] = {"Hour": local_hour, "Minute": local_minute}
         with INSTALLED.open("wb") as fh:
             plistlib.dump(data, fh)
-        step("更新已安装的 plist", True, str(INSTALLED))
+        step("更新已安装的 plist", True,
+             f"{hour:02d}:{minute:02d} {tz_name} = {local_hour:02d}:{local_minute:02d} 本地")
     except Exception as exc:  # noqa: BLE001
         step("更新已安装的 plist", False, str(exc))
         return steps
@@ -125,15 +200,21 @@ def set_schedule(hour: int, minute: int) -> list[dict]:
     try:
         src = TEMPLATE.read_text(encoding="utf-8")
         src = re.sub(r"(<key>Hour</key>\s*<integer>)\d+(</integer>)",
-                     rf"\g<1>{hour}\g<2>", src, count=1)
+                     rf"\g<1>{local_hour}\g<2>", src, count=1)
         src = re.sub(r"(<key>Minute</key>\s*<integer>)\d+(</integer>)",
-                     rf"\g<1>{minute}\g<2>", src, count=1)
+                     rf"\g<1>{local_minute}\g<2>", src, count=1)
         TEMPLATE.write_text(src, encoding="utf-8")
         step("同步 plist 模板", True)
     except Exception as exc:  # noqa: BLE001
         step("同步 plist 模板", False, str(exc))
 
-    wh, wm = wake_time(hour, minute)
+    cfg = load_config()
+    cfg.update({"timezone": tz_name, "hour": hour, "minute": minute,
+                "computedUnderSystemTimezone": system_timezone()})
+    save_config(cfg)
+    step("写入 config.json", True, f"timezone={tz_name}")
+
+    wh, wm = wake_time(local_hour, local_minute)
     try:
         sh = INSTALL_SH.read_text(encoding="utf-8")
         sh = re.sub(r'WAKE_TIME="\d{2}:\d{2}:\d{2}"',
@@ -215,7 +296,12 @@ class Handler(BaseHTTPRequestHandler):
             if not (0 <= hour <= 23 and 0 <= minute <= 59):
                 self._json({"error": "hour 需在 0-23，minute 需在 0-59"}, 400)
                 return
-            self._json({"steps": set_schedule(hour, minute), "status": status()})
+            tz_name = payload.get("timezone") or load_config()["timezone"]
+            if tz_name not in available_timezones():
+                self._json({"error": f"未知时区 {tz_name}"}, 400)
+                return
+            self._json({"steps": set_schedule(hour, minute, tz_name),
+                        "status": status()})
 
         elif self.path == "/api/toggle":
             enable = bool(payload.get("enable"))

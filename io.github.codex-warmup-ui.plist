@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.hoead.codex-warmup-ui</string>
+    <string>io.github.codex-warmup-ui</string>
 
     <key>ProgramArguments</key>
     <array>

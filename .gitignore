@@ -11,3 +11,7 @@ ui.err.log
 .DS_Store
 __pycache__/
 *.pyc
+.sudoers.rendered
+
+# local state, not source (see config.example.json)
+config.json

@@ -9,9 +9,24 @@ LOG="$DIR/warmup.log"
 LOCK="$DIR/.warmup.lock"   # a directory: mkdir is the atomic test-and-set
 TIMEOUT_SECS="${WARMUP_TIMEOUT_SECS:-240}"
 
-# codex lives inside ChatGPT.app; allow an override for other install layouts.
-CODEX="${CODEX_BIN:-/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex}"
-[ -x "$CODEX" ] || CODEX="$(command -v codex 2>/dev/null || true)"
+# Codex ships several ways on macOS: bundled inside ChatGPT.app, as a
+# standalone app, or installed by npm/brew onto PATH. Try each in turn.
+find_codex() {
+  [ -n "${CODEX_BIN:-}" ] && { printf '%s' "$CODEX_BIN"; return; }
+  local c
+  for c in \
+    "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex" \
+    "/Applications/Codex.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex" \
+    "/Applications/Codex.app/Contents/MacOS/codex" \
+    "/opt/homebrew/bin/codex" \
+    "/usr/local/bin/codex" \
+    "$HOME/.local/bin/codex"
+  do
+    [ -x "$c" ] && { printf '%s' "$c"; return; }
+  done
+  command -v codex 2>/dev/null || true
+}
+CODEX="$(find_codex)"
 
 export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
@@ -81,7 +96,7 @@ if [ "$RC" -eq 0 ] && [ -s "$OUT" ]; then
   # but ELAPSED is wall-clock, so the two diverge when the Mac slept mid-run.
   SLEPT=""
   [ "$ELAPSED" -gt 120 ] && SLEPT=" [machine slept mid-run; anchor landed late]"
-  log "OK    exit=0 ${ELAPSED}s${SLEPT}  tail: ${REPLY}"
+  log "OK    exit=0 ${ELAPSED}s tz=$(date +%Z%z)${SLEPT}  tail: ${REPLY}"
 elif [ "$RC" -eq 0 ]; then
   # Exit 0 with no output means no turn happened -- e.g. auth silently lapsed.
   # That would not anchor a window, so do not report it as success.
