@@ -1,16 +1,27 @@
 #!/bin/bash
-# Remove everything install.sh created, including the pmset wake schedule.
+# Remove everything setup.sh installed. Logs and config.json are left behind;
+# delete the folder to get rid of those too.
 set -uo pipefail
 
-LABEL="io.github.codex-warmup"
-TARGET="$HOME/Library/LaunchAgents/$LABEL.plist"
+JOB="io.github.codex-anchor-mac"
+UI="io.github.codex-anchor-mac.ui"
 
-echo "==> unloading the LaunchAgent"
-launchctl bootout "gui/$UID/$LABEL" 2>/dev/null || echo "    (was not loaded)"
-rm -f "$TARGET" && echo "    removed $TARGET"
+for label in "$UI" "$JOB"; do
+  if launchctl print "gui/$UID/$label" >/dev/null 2>&1; then
+    launchctl bootout "gui/$UID/$label" 2>/dev/null && echo "unloaded $label"
+  fi
+  rm -f "$HOME/Library/LaunchAgents/$label.plist"
+done
 
-echo "==> cancelling the repeating wake (needs sudo)"
-sudo pmset repeat cancel
+echo "cancelling the repeating wake (needs admin)"
+osascript -e 'do shell script "/usr/bin/pmset repeat cancel" with administrator privileges with prompt "codex-anchor-mac is removing its daily wake"' \
+  >/dev/null 2>&1 && echo "  cancelled" || echo "  SKIPPED -- run: sudo pmset repeat cancel"
 
-echo "==> done. logs are left in place; delete this folder to remove them."
-pmset -g sched
+if [ -f /etc/sudoers.d/codex-anchor-mac ]; then
+  echo "removing the sudoers rule (needs admin)"
+  osascript -e 'do shell script "/bin/rm -f /etc/sudoers.d/codex-anchor-mac" with administrator privileges with prompt "codex-anchor-mac is removing its sudoers rule"' \
+    >/dev/null 2>&1 && echo "  removed" || echo "  SKIPPED -- run: sudo rm /etc/sudoers.d/codex-anchor-mac"
+fi
+
+echo
+echo "Done. Logs and config.json are still in $(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

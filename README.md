@@ -1,4 +1,4 @@
-# codex-quota-warmup
+# codex-anchor-mac
 
 [![English](https://img.shields.io/badge/English-blue?style=for-the-badge)](README.md)
 [![简体中文](https://img.shields.io/badge/简体中文-lightgrey?style=for-the-badge)](README.zh-CN.md)
@@ -10,7 +10,13 @@ the window boundaries fall **inside** your working day instead of after it.
 > deliberately tiny request so the rolling window *starts* at a useful moment.
 > You get the same amount of usage per window as everyone else.
 
-**macOS only, on purpose.** See [Other platforms](#other-platforms) below.
+**For ChatGPT Plus, on macOS.** Two deliberate limits:
+
+- **Plus, not Pro.** Plus got the 5-hour window back on 25 Aug 2026;
+  [OpenAI's pricing docs](https://developers.openai.com/codex/pricing) say Pro
+  plans currently have no five-hour limit at all. On Pro there is no window to
+  anchor and the weekly cap is what binds, so this tool does nothing for you.
+- **macOS, not cross-platform.** See [Other platforms](#other-platforms).
 
 ---
 
@@ -78,10 +84,16 @@ up at 4am.
 ## Install
 
 ```bash
-git clone https://github.com/YOUR_USER/codex-quota-warmup.git ~/codex-quota-warmup
-cd ~/codex-quota-warmup
-./install.sh        # the warmup job
-./install-ui.sh     # optional: the control panel
+git clone https://github.com/unnamedhoead/codex-anchor-mac.git ~/codex-anchor-mac
+cd ~/codex-anchor-mac && ./setup.sh
+```
+
+That is the whole install. `setup.sh` sets up the job, starts the control
+panel and opens it in your browser.
+
+```bash
+./setup.sh --no-panel   # just the warmup job
+./setup.sh --no-wake    # skip the admin prompt entirely
 ```
 
 Do **not** put the folder in `~/Documents`, `~/Desktop` or `~/Downloads`
@@ -98,13 +110,16 @@ control panel change the wake time later without prompting.
 
 ## Control panel
 
-`./install-ui.sh` runs a small server on `http://127.0.0.1:7788` (localhost
-only) that lets you:
+![Control panel](docs/panel.png)
+
+`setup.sh` runs a small server on `http://127.0.0.1:7788` (localhost only)
+that lets you:
 
 - change the trigger time, in a timezone you pick
 - enable or disable the job
 - trigger a run manually
 - read the last 15 runs
+- switch the interface between English and 中文
 
 Changing the time keeps the launchd job, `install.sh` and the `pmset` wake in
 sync, so they cannot drift apart.
@@ -135,7 +150,7 @@ day.
 It logs to `warmup.log`:
 
 ```
-2026-10-07 05:02:18 +0800  OK  exit=0 22s tz=CST+0800  tail: # codex-quota-warmup ...
+2026-10-07 05:02:18 +0800  OK  exit=0 22s tz=CST+0800  tail: # codex-anchor-mac ...
 ```
 
 **It must authenticate as a ChatGPT subscription** (`auth_mode = chatgpt` in
@@ -166,8 +181,7 @@ Linux, where the power-management problems above do not apply:
 ## Uninstall
 
 ```bash
-./uninstall-ui.sh   # control panel
-./uninstall.sh      # warmup job and the pmset wake
+./uninstall.sh
 ```
 
 ## License

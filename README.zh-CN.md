@@ -1,4 +1,4 @@
-# codex-quota-warmup
+# codex-anchor-mac
 
 [![English](https://img.shields.io/badge/English-lightgrey?style=for-the-badge)](README.md)
 [![简体中文](https://img.shields.io/badge/简体中文-blue?style=for-the-badge)](README.zh-CN.md)
@@ -9,7 +9,13 @@
 > **它不增加额度，也不绕过任何限制。** 它只发一次刻意极小的请求，让滚动窗口在一个
 > 对你有利的时刻*开始*。每个窗口里能用的量和其他人完全一样。
 
-**只支持 macOS，这是刻意的选择。** 其他平台见下方[其他平台](#其他平台)。
+**面向 ChatGPT Plus 用户，仅限 macOS。** 两条都是刻意的限制：
+
+- **Plus，不是 Pro。** Plus 在 2026-08-25 恢复了 5 小时窗口；
+  [OpenAI 官方 pricing 文档](https://developers.openai.com/codex/pricing)写明
+  Pro 目前完全没有 5 小时限额。Pro 用户没有窗口可锚定，真正卡人的是周限额，
+  所以这个工具对你没用。
+- **macOS，不跨平台。** 其他平台见下方[其他平台](#其他平台)。
 
 ---
 
@@ -70,10 +76,15 @@ warmup 时刻 = 起床时间 + 一个窗口能撑多久 − 5h
 ## 安装
 
 ```bash
-git clone https://github.com/YOUR_USER/codex-quota-warmup.git ~/codex-quota-warmup
-cd ~/codex-quota-warmup
-./install.sh        # warmup 任务本体
-./install-ui.sh     # 可选：控制面板
+git clone https://github.com/unnamedhoead/codex-anchor-mac.git ~/codex-anchor-mac
+cd ~/codex-anchor-mac && ./setup.sh
+```
+
+安装到此结束。`setup.sh` 会装好任务、启动控制面板，并在浏览器里打开它。
+
+```bash
+./setup.sh --no-panel   # 只装 warmup 任务
+./setup.sh --no-wake    # 完全跳过管理员授权
 ```
 
 **不要**把文件夹放进 `~/Documents`、`~/Desktop` 或 `~/Downloads`（原因见上）。
@@ -89,12 +100,15 @@ cd ~/codex-quota-warmup
 
 ## 控制面板
 
-`./install-ui.sh` 会在 `http://127.0.0.1:7788` 起一个小服务（仅监听 localhost），可以：
+![控制面板](docs/panel.png)
+
+`setup.sh` 会在 `http://127.0.0.1:7788` 起一个小服务（仅监听 localhost），可以：
 
 - 改触发时间，时区自选
 - 启用或停用任务
 - 手动触发一次
 - 查看最近 15 次运行
+- 在 English 和中文之间切换界面语言
 
 改时间会同时同步 launchd 任务、`install.sh` 和 `pmset` 唤醒，三者不会各自跑偏。
 
@@ -119,7 +133,7 @@ launchd 只认系统时钟。面板允许你选任意 IANA 时区，写入计划
 日志写入 `warmup.log`：
 
 ```
-2026-10-07 05:02:18 +0800  OK  exit=0 22s tz=CST+0800  tail: # codex-quota-warmup ...
+2026-10-07 05:02:18 +0800  OK  exit=0 22s tz=CST+0800  tail: # codex-anchor-mac ...
 ```
 
 **它必须以 ChatGPT 订阅身份认证**（`~/.codex/auth.json` 里 `auth_mode = chatgpt`）。
@@ -146,8 +160,7 @@ OpenAI API key 是单独计费的，走 API 根本不会启动订阅的窗口。
 ## 卸载
 
 ```bash
-./uninstall-ui.sh   # 控制面板
-./uninstall.sh      # warmup 任务和 pmset 唤醒
+./uninstall.sh
 ```
 
 ## 许可

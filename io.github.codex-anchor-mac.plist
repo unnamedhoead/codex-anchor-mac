@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>io.github.codex-warmup</string>
+    <string>io.github.codex-anchor-mac</string>
 
     <key>ProgramArguments</key>
     <array>

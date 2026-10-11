@@ -52,7 +52,7 @@ fi
 
 PROMPT='Read README.md in the current directory and print only its first 100 characters. Do nothing else.'
 
-OUT="$(mktemp -t codex-warmup)"
+OUT="$(mktemp -t codex-anchor)"
 START_EPOCH=$(date +%s)
 
 # A pmset wake lands the Mac in DarkWake, where it honours "Sleep Service Back

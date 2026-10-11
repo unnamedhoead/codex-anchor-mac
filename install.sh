@@ -4,7 +4,7 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LABEL="io.github.codex-warmup"
+LABEL="io.github.codex-anchor-mac"
 TEMPLATE="$DIR/$LABEL.plist"
 TARGET="$HOME/Library/LaunchAgents/$LABEL.plist"
 WAKE_TIME="04:27:00"
@@ -19,7 +19,7 @@ case "$DIR/" in
   "$HOME/Movies/"*|"$HOME/Music/"*|"$HOME/Pictures/"*)
     echo "ERROR: $DIR is inside a macOS TCC-protected folder." >&2
     echo "       launchd cannot execute scripts there -- move this folder to" >&2
-    echo "       somewhere like ~/codex-quota-warmup and run ./install.sh again." >&2
+    echo "       somewhere like ~/codex-anchor-mac and run ./install.sh again." >&2
     exit 1
     ;;
 esac
@@ -35,6 +35,13 @@ launchctl bootstrap "gui/$UID" "$TARGET"
 launchctl enable "gui/$UID/$LABEL"
 
 echo
+if [ "${SKIP_WAKE:-0}" = "1" ]; then
+  echo "==> daily wake skipped (--no-wake)"
+  echo
+  echo "==> done."
+  exit 0
+fi
+
 echo "==> optional: daily wake at $WAKE_TIME"
 echo "    launchd cannot wake a sleeping Mac, so without this the job is late"
 echo "    (or skipped) on nights the Mac is not plugged in. Plugged-in users"
@@ -46,15 +53,15 @@ echo
 ADMIN_SCRIPT="/usr/bin/pmset repeat wake MTWRFSU $WAKE_TIME"
 if [ "${WARMUP_INSTALL_SUDOERS:-1}" = "1" ]; then
   RENDERED="$DIR/.sudoers.rendered"
-  sed "s|__USER__|$(id -un)|g" "$DIR/sudoers.codex-warmup.template" >"$RENDERED"
+  sed "s|__USER__|$(id -un)|g" "$DIR/sudoers.codex-anchor-mac.template" >"$RENDERED"
   chmod 0600 "$RENDERED"
   # Letting the panel change the wake time later needs a narrow NOPASSWD rule.
-  ADMIN_SCRIPT="$ADMIN_SCRIPT && /usr/bin/install -m 0440 -o root -g wheel '$RENDERED' /etc/sudoers.d/codex-warmup"
+  ADMIN_SCRIPT="$ADMIN_SCRIPT && /usr/bin/install -m 0440 -o root -g wheel '$RENDERED' /etc/sudoers.d/codex-anchor-mac"
 fi
 
 if sudo -n pmset repeat wake MTWRFSU "$WAKE_TIME" 2>/dev/null; then
   echo "    done (sudoers rule already in place)"
-elif osascript -e "do shell script \"$ADMIN_SCRIPT\" with administrator privileges with prompt \"codex-quota-warmup needs to schedule a daily wake\"" >/dev/null 2>&1; then
+elif osascript -e "do shell script \"$ADMIN_SCRIPT\" with administrator privileges with prompt \"codex-anchor-mac needs to schedule a daily wake\"" >/dev/null 2>&1; then
   echo "    done"
 else
   echo "    SKIPPED (cancelled or failed). The warmup still runs; it will just"

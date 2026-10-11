@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo, available_timezones
 
 PORT = 7788
 BIND = "127.0.0.1"
-LABEL = "io.github.codex-warmup"
+LABEL = "io.github.codex-anchor-mac"
 DIR = pathlib.Path(__file__).resolve().parent
 TEMPLATE = DIR / f"{LABEL}.plist"
 INSTALL_SH = DIR / "install.sh"
@@ -119,16 +119,21 @@ def wake_time(hour: int, minute: int) -> tuple[int, int]:
     return divmod(total, 60)
 
 
-def agent_loaded() -> tuple[bool, str]:
+def agent_state() -> dict:
+    """Structured, not prose: the UI renders it in whichever language is on."""
     rc, out = run(["launchctl", "print", SERVICE])
     if rc != 0:
-        return False, "未加载"
-    state = "运行中" if "state = running" in out else "已加载，待触发"
+        return {"loaded": False, "running": False, "lastExit": None}
+    exit_code = None
     for line in out.splitlines():
         if "last exit code" in line:
-            state += f"（上次退出码 {line.split('=')[-1].strip()}）"
+            raw = line.split("=")[-1].strip()
+            if raw.lstrip("-").isdigit():
+                exit_code = int(raw)
             break
-    return True, state
+    return {"loaded": True,
+            "running": "state = running" in out,
+            "lastExit": exit_code}
 
 
 def pmset_wake() -> str:
@@ -151,7 +156,7 @@ def recent_runs(limit: int = 15) -> list[str]:
 def status() -> dict:
     cfg = load_config()
     local_hour, local_minute = read_schedule()
-    loaded, state = agent_loaded()
+    agent = agent_state()
     wh, wm = wake_time(local_hour, local_minute) if local_hour is not None else (None, None)
     sys_tz = system_timezone()
     return {
@@ -166,8 +171,9 @@ def status() -> dict:
                       if local_hour is not None else None),
         "sameClock": cfg["timezone"] == sys_tz,
         "drifted": timezone_drifted(cfg),
-        "loaded": loaded,
-        "state": state,
+        "loaded": agent["loaded"],
+        "running": agent["running"],
+        "lastExit": agent["lastExit"],
         "pmsetWake": pmset_wake(),
         "expectedWake": f"{wh:02d}:{wm:02d}" if wh is not None else None,
         "runs": recent_runs(),
@@ -238,7 +244,7 @@ def set_schedule(hour: int, minute: int, tz_name: str) -> list[dict]:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "codex-warmup-ui"
+    server_version = "codex-anchor-mac"
 
     def log_message(self, fmt, *args):  # quieter launchd logs
         pass
@@ -324,7 +330,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     srv = ThreadingHTTPServer((BIND, PORT), Handler)
-    print(f"codex-warmup control panel on http://{BIND}:{PORT}", flush=True)
+    print(f"codex-anchor-mac control panel on http://{BIND}:{PORT}", flush=True)
     srv.serve_forever()
 
 
