@@ -124,7 +124,7 @@ const STR = {
     timeHint: 'The time is read in the timezone you pick, then converted to the system clock that launchd understands. The pmset wake is set 3 minutes earlier automatically.',
     runNowHint: 'Running now opens a 5-hour window immediately',
     sameZone: 'same as chosen timezone', noRuns: '(no runs yet)', loading: 'Loading…',
-    notConfigured: 'not configured', notLoaded: 'not loaded',
+    notConfigured: 'not configured', notLoaded: 'not loaded', notSet: 'not set',
     loaded: 'loaded, waiting', running: 'running', lastExit: 'last exit',
     never: 'never run yet',
     confirmRun: 'Send a real request now? This opens a 5-hour window immediately.',
@@ -141,7 +141,7 @@ const STR = {
     timeHint: '时间按所选时区解释，再换算成 launchd 认得的系统本地时间。pmset 唤醒自动设为提前 3 分钟。',
     runNowHint: '立即跑会当场开一个 5 小时窗口',
     sameZone: '与所选时区相同', noRuns: '（暂无记录）', loading: '加载中…',
-    notConfigured: '未配置', notLoaded: '未加载',
+    notConfigured: '未配置', notLoaded: '未加载', notSet: '未设置',
     loaded: '已加载，待触发', running: '运行中', lastExit: '上次退出码',
     never: '尚未运行过',
     confirmRun: '立即发一次真实请求？这会当场开启一个 5 小时窗口。',
@@ -196,7 +196,8 @@ function render(s) {
   document.getElementById('time').textContent = s.time || T().notConfigured;
   document.getElementById('state').textContent = describeState(s);
   document.getElementById('state').className = 'v ' + (s.loaded ? 'ok' : 'bad');
-  document.getElementById('wake').textContent = s.pmsetWake;
+  document.getElementById('wake').textContent =
+    s.pmsetWake === 'not set' ? T().notSet : s.pmsetWake;
   document.getElementById('expected').textContent = s.expectedWake || '-';
   document.getElementById('tz').textContent = s.timezone;
   document.getElementById('localtime').textContent =

@@ -32,10 +32,10 @@ Codex、Work、工作空间智能体和 ChatGPT for Excel 共享一个额度池�
 10:00-13:00  干等三小时
 ```
 
-在你起床前发一次 warmup，会把边界整体前移，于是**更多边界落进你的工作时段**：
+在你起床前发一次 anchor，会把边界整体前移，于是**更多边界落进你的工作时段**：
 
 ```
-05:00  warmup（几秒钟，额度消耗可忽略）  ->  窗口 05:00-10:00
+05:00  anchor（几秒钟，额度消耗可忽略）  ->  窗口 05:00-10:00
 08:00  你开工，拿到一整块没动过的额度
 10:00  额度耗尽 —— 而窗口恰好在同一刻翻篇
 10:00  新窗口 10:00-15:00，无需等待
@@ -44,7 +44,7 @@ Codex、Work、工作空间智能体和 ChatGPT for Excel 共享一个额度池�
 ## 怎么选时间
 
 ```
-warmup 时刻 = 起床时间 + 一个窗口能撑多久 − 5h
+anchor 时刻 = 起床时间 + 一个窗口能撑多久 − 5h
 ```
 
 8:00 起床、2 小时烧完？`08:00 + 2h − 5h = 05:00`。
@@ -54,7 +54,7 @@ warmup 时刻 = 起床时间 + 一个窗口能撑多久 − 5h
 
 ## 为什么偏偏是 macOS
 
-多数 warmup 工具就是一行 cron。在 macOS 上它会悄无声息地失效，而且有两种失效方式，
+同类工具多数就是一行 cron。在 macOS 上它会悄无声息地失效，而且有两种失效方式，
 **都不报错**——只是任务静静地错过时间。
 
 **1. TCC 挡住 launchd 访问受保护目录。** 把脚本放在 `~/Documents`、`~/Desktop` 或
@@ -83,7 +83,7 @@ cd ~/codex-anchor-mac && ./setup.sh
 安装到此结束。`setup.sh` 会装好任务、启动控制面板，并在浏览器里打开它。
 
 ```bash
-./setup.sh --no-panel   # 只装 warmup 任务
+./setup.sh --no-panel   # 只装 anchor 任务
 ./setup.sh --no-wake    # 完全跳过管理员授权
 ```
 
@@ -91,11 +91,11 @@ cd ~/codex-anchor-mac && ./setup.sh
 安装脚本会拦住你。
 
 `install.sh` 的核心任务不需要任何特权。之后它会询问是否设置每日定时唤醒——这一步需要
-管理员权限，通过 macOS 标准授权弹窗询问一次（支持 Touch ID）。**你可以拒绝**：warmup
+管理员权限，通过 macOS 标准授权弹窗询问一次（支持 Touch ID）。**你可以拒绝**：anchor
 照常运行，只是在没插电、机器睡着的夜里会迟到。如果你的 Mac 接电源时不休眠，完全不需要
 这一步。
 
-设 `WARMUP_INSTALL_SUDOERS=0` 可跳过那条窄作用域的 `sudoers` 规则（该规则的作用是让
+设 `ANCHOR_INSTALL_SUDOERS=0` 可跳过那条窄作用域的 `sudoers` 规则（该规则的作用是让
 控制面板以后改时间时不必再次授权）。
 
 ## 控制面板
@@ -122,7 +122,7 @@ launchd 只认系统时钟。面板允许你选任意 IANA 时区，写入计划
 
 ## 工作原理
 
-`warmup.sh` 对 ChatGPT.app 内置（或 `PATH` 上）的 Codex CLI 执行一次 `codex exec`：
+`anchor.sh` 对 ChatGPT.app 内置（或 `PATH` 上）的 Codex CLI 执行一次 `codex exec`：
 
 - `-s read-only` —— 显式沙箱，确保无人值守的任务不会继承宽松的全局配置
 - `--ephemeral` —— 不留 session 历史
@@ -130,7 +130,7 @@ launchd 只认系统时钟。面板允许你选任意 IANA 时区，写入计划
 - 提示词是「读取本 README 并输出前 100 字」，顺便充当健康检查：日志尾部不对劲，
   就说明有问题
 
-日志写入 `warmup.log`：
+日志写入 `anchor.log`：
 
 ```
 2026-10-07 05:02:18 +0800  OK  exit=0 22s tz=CST+0800  tail: # codex-anchor-mac ...
@@ -138,6 +138,17 @@ launchd 只认系统时钟。面板允许你选任意 IANA 时区，写入计划
 
 **它必须以 ChatGPT 订阅身份认证**（`~/.codex/auth.json` 里 `auth_mode = chatgpt`）。
 OpenAI API key 是单独计费的，走 API 根本不会启动订阅的窗口。
+
+## 开发
+
+```bash
+./test.sh
+```
+
+28 条冒烟测试，全部针对临时目录里的桩二进制运行，**不会发出任何真实请求，也不会
+开启额度窗口**。覆盖 `anchor.sh` 的成功 / 空输出 / 失败 / 看门狗 / 找不到二进制 /
+加锁等路径，时区换算，以及各项守卫（TCC 拒绝、plist 严格 XML、sudoers 语法）。
+CI 在 `macos-latest` 上运行。
 
 ## 已知限制
 

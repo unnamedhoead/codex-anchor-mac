@@ -34,11 +34,11 @@ So if you sit down at 08:00 and burn through a window's quota in two hours:
 10:00-13:00  three hours of waiting
 ```
 
-A warmup request before you wake up shifts the boundaries earlier, which puts
+A anchor request before you wake up shifts the boundaries earlier, which puts
 *more* boundaries inside your working day:
 
 ```
-05:00  warmup (a few seconds, negligible quota)  ->  window runs 05:00-10:00
+05:00  anchor (a few seconds, negligible quota)  ->  window runs 05:00-10:00
 08:00  you start work with a full, untouched window
 10:00  quota exhausted -- and the window rolls over at the same moment
 10:00  new window 10:00-15:00, no waiting
@@ -47,7 +47,7 @@ A warmup request before you wake up shifts the boundaries earlier, which puts
 ## Picking your time
 
 ```
-warmup time = wake-up time + how long a window lasts you - 5h
+anchor time = wake-up time + how long a window lasts you - 5h
 ```
 
 Wake at 08:00 and exhaust a window in 2h? `08:00 + 2h - 5h = 05:00`.
@@ -58,7 +58,7 @@ expires before you can use much of it, and you waste the part you slept through.
 
 ## Why macOS specifically
 
-Most warmup tools are a cron line. On macOS that quietly does not work, in two
+Most anchoring tools are a cron line. On macOS that quietly does not work, in two
 ways that produce **no error** — just a job that silently misses its time.
 
 **1. TCC blocks launchd from protected folders.** Put the script in
@@ -92,7 +92,7 @@ That is the whole install. `setup.sh` sets up the job, starts the control
 panel and opens it in your browser.
 
 ```bash
-./setup.sh --no-panel   # just the warmup job
+./setup.sh --no-panel   # just the anchor job
 ./setup.sh --no-wake    # skip the admin prompt entirely
 ```
 
@@ -101,11 +101,11 @@ Do **not** put the folder in `~/Documents`, `~/Desktop` or `~/Downloads`
 
 `install.sh` needs no privileges for the core job. It then offers to schedule a
 daily wake, which does need admin rights; it asks once through the standard
-macOS authorization dialog (Touch ID works). **You can decline** — the warmup
+macOS authorization dialog (Touch ID works). **You can decline** — the anchor
 still runs, it is just late on nights the Mac is asleep on battery. If your Mac
 stays awake on AC power, you do not need it at all.
 
-Set `WARMUP_INSTALL_SUDOERS=0` to skip the narrow `sudoers` rule that lets the
+Set `ANCHOR_INSTALL_SUDOERS=0` to skip the narrow `sudoers` rule that lets the
 control panel change the wake time later without prompting.
 
 ## Control panel
@@ -137,7 +137,7 @@ day.
 
 ## How it works
 
-`warmup.sh` runs one `codex exec` against the Codex CLI bundled in ChatGPT.app
+`anchor.sh` runs one `codex exec` against the Codex CLI bundled in ChatGPT.app
 (or on `PATH`), with:
 
 - `-s read-only` — an explicit sandbox, so an unattended job never inherits a
@@ -147,7 +147,7 @@ day.
 - a prompt that reads this README and prints its first 100 characters, which
   doubles as a health check: if the log tail looks wrong, something is wrong
 
-It logs to `warmup.log`:
+It logs to `anchor.log`:
 
 ```
 2026-10-07 05:02:18 +0800  OK  exit=0 22s tz=CST+0800  tail: # codex-anchor-mac ...
@@ -156,6 +156,18 @@ It logs to `warmup.log`:
 **It must authenticate as a ChatGPT subscription** (`auth_mode = chatgpt` in
 `~/.codex/auth.json`). An OpenAI API key is billed separately and will not
 start a subscription window at all.
+
+## Development
+
+```bash
+./test.sh
+```
+
+28 smoke tests, all against a stub binary in a throwaway directory, so no real
+request is ever sent and no quota window is opened. They cover `anchor.sh`'s
+success, empty-output, failure, watchdog, missing-binary and locking paths, the
+timezone conversion, and the guards (TCC refusal, strict-XML plists, sudoers
+syntax). CI runs them on `macos-latest`.
 
 ## Known limitations
 

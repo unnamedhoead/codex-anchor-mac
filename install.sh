@@ -1,5 +1,6 @@
 #!/bin/bash
-# Install the daily warmup: a LaunchAgent at 04:58 plus a pmset wake at 04:55
+# Install the daily anchor: a LaunchAgent at the configured time, plus a
+# pmset wake three minutes earlier
 # so the Mac is actually awake when the agent fires.
 set -euo pipefail
 
@@ -26,7 +27,7 @@ esac
 
 echo "==> writing $TARGET"
 mkdir -p "$HOME/Library/LaunchAgents"
-sed -e "s|__WARMUP_SH__|$DIR/warmup.sh|g" -e "s|__DIR__|$DIR|g" "$TEMPLATE" >"$TARGET"
+sed -e "s|__ANCHOR_SH__|$DIR/anchor.sh|g" -e "s|__DIR__|$DIR|g" "$TEMPLATE" >"$TARGET"
 plutil -lint "$TARGET"
 
 echo "==> (re)loading the LaunchAgent"
@@ -51,7 +52,7 @@ echo
 # Authorization Services rather than sudo: works without a terminal, shows the
 # standard macOS prompt, and supports Touch ID. One prompt covers both changes.
 ADMIN_SCRIPT="/usr/bin/pmset repeat wake MTWRFSU $WAKE_TIME"
-if [ "${WARMUP_INSTALL_SUDOERS:-1}" = "1" ]; then
+if [ "${ANCHOR_INSTALL_SUDOERS:-1}" = "1" ]; then
   RENDERED="$DIR/.sudoers.rendered"
   sed "s|__USER__|$(id -un)|g" "$DIR/sudoers.codex-anchor-mac.template" >"$RENDERED"
   chmod 0600 "$RENDERED"
@@ -64,7 +65,7 @@ if sudo -n pmset repeat wake MTWRFSU "$WAKE_TIME" 2>/dev/null; then
 elif osascript -e "do shell script \"$ADMIN_SCRIPT\" with administrator privileges with prompt \"codex-anchor-mac needs to schedule a daily wake\"" >/dev/null 2>&1; then
   echo "    done"
 else
-  echo "    SKIPPED (cancelled or failed). The warmup still runs; it will just"
+  echo "    SKIPPED (cancelled or failed). The anchor still runs; it will just"
   echo "    be late on battery nights. To enable it later, re-run ./install.sh"
 fi
 rm -f "$DIR/.sudoers.rendered"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local control panel for the Codex quota warmup job.
+"""Local control panel for the Codex quota anchor job.
 
 Binds 127.0.0.1 only. Lets you change the daily trigger time (keeping the
 launchd job and the pmset wake in sync), watch recent runs, disable the job
@@ -23,7 +23,7 @@ LABEL = "io.github.codex-anchor-mac"
 DIR = pathlib.Path(__file__).resolve().parent
 TEMPLATE = DIR / f"{LABEL}.plist"
 INSTALL_SH = DIR / "install.sh"
-LOG = DIR / "warmup.log"
+LOG = DIR / "anchor.log"
 INSTALLED = pathlib.Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 INDEX = DIR / "index.html"
 CONFIG = DIR / "config.json"
@@ -61,8 +61,11 @@ def system_timezone() -> str:
 def load_config() -> dict:
     try:
         cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
-    except Exception:
+    except FileNotFoundError:
         cfg = {}
+    except (json.JSONDecodeError, OSError) as exc:
+        # Fall back to defaults rather than 500, but keep the reason visible.
+        cfg = {"_error": f"config.json could not be read ({exc}); using defaults"}
     # A null timezone means "whatever this Mac is set to" -- the right default
     # for anyone who clones this, rather than inheriting the author's zone.
     if not cfg.get("timezone"):
@@ -139,7 +142,7 @@ def agent_state() -> dict:
 def pmset_wake() -> str:
     _, out = run(["pmset", "-g", "sched"])
     m = re.search(r"wake at (\S+ ?\S*) every day", out)
-    return m.group(1) if m else "未设置"
+    return m.group(1) if m else "not set"
 
 
 def recent_runs(limit: int = 15) -> list[str]:
@@ -195,10 +198,14 @@ def set_schedule(hour: int, minute: int, tz_name: str) -> list[dict]:
         data["StartCalendarInterval"] = {"Hour": local_hour, "Minute": local_minute}
         with INSTALLED.open("wb") as fh:
             plistlib.dump(data, fh)
-        step("更新已安装的 plist", True,
-             f"{hour:02d}:{minute:02d} {tz_name} = {local_hour:02d}:{local_minute:02d} 本地")
+        step("update installed plist", True,
+             f"{hour:02d}:{minute:02d} {tz_name} = {local_hour:02d}:{local_minute:02d} system time")
+    except FileNotFoundError:
+        step("update installed plist", False,
+             "the LaunchAgent is not installed -- run ./setup.sh first")
+        return steps
     except Exception as exc:  # noqa: BLE001
-        step("更新已安装的 plist", False, str(exc))
+        step("update installed plist", False, str(exc))
         return steps
 
     # Keep the template and installer in sync so re-running install.sh does not
@@ -210,15 +217,15 @@ def set_schedule(hour: int, minute: int, tz_name: str) -> list[dict]:
         src = re.sub(r"(<key>Minute</key>\s*<integer>)\d+(</integer>)",
                      rf"\g<1>{local_minute}\g<2>", src, count=1)
         TEMPLATE.write_text(src, encoding="utf-8")
-        step("同步 plist 模板", True)
+        step("sync plist template", True)
     except Exception as exc:  # noqa: BLE001
-        step("同步 plist 模板", False, str(exc))
+        step("sync plist template", False, str(exc))
 
     cfg = load_config()
     cfg.update({"timezone": tz_name, "hour": hour, "minute": minute,
                 "computedUnderSystemTimezone": system_timezone()})
     save_config(cfg)
-    step("写入 config.json", True, f"timezone={tz_name}")
+    step("write config.json", True, f"timezone={tz_name}")
 
     wh, wm = wake_time(local_hour, local_minute)
     try:
@@ -226,20 +233,20 @@ def set_schedule(hour: int, minute: int, tz_name: str) -> list[dict]:
         sh = re.sub(r'WAKE_TIME="\d{2}:\d{2}:\d{2}"',
                     f'WAKE_TIME="{wh:02d}:{wm:02d}:00"', sh, count=1)
         INSTALL_SH.write_text(sh, encoding="utf-8")
-        step("同步 install.sh 的 WAKE_TIME", True, f"{wh:02d}:{wm:02d}:00")
+        step("sync install.sh WAKE_TIME", True, f"{wh:02d}:{wm:02d}:00")
     except Exception as exc:  # noqa: BLE001
-        step("同步 install.sh 的 WAKE_TIME", False, str(exc))
+        step("sync install.sh WAKE_TIME", False, str(exc))
 
     run(["launchctl", "bootout", SERVICE])
     rc, out = run(["launchctl", "bootstrap", f"gui/{UID}", str(INSTALLED)])
-    step("重新加载 launchd", rc == 0, out)
+    step("reload launchd", rc == 0, out)
     run(["launchctl", "enable", SERVICE])
 
     # -n so a missing sudoers rule fails loudly instead of hanging on a prompt.
     rc, out = run(["sudo", "-n", "pmset", "repeat", "wake", "MTWRFSU",
                    f"{wh:02d}:{wm:02d}:00"])
-    step("更新 pmset 唤醒", rc == 0,
-         out or (f"已设为 {wh:02d}:{wm:02d}" if rc == 0 else "需要 sudoers 规则"))
+    step("update pmset wake", rc == 0,
+         out or (f"set to {wh:02d}:{wm:02d}" if rc == 0 else "needs the sudoers rule -- re-run ./setup.sh"))
     return steps
 
 
@@ -297,14 +304,14 @@ class Handler(BaseHTTPRequestHandler):
                 hour = int(payload["hour"])
                 minute = int(payload["minute"])
             except (KeyError, TypeError, ValueError):
-                self._json({"error": "hour/minute 必须是整数"}, 400)
+                self._json({"error": "hour and minute must be integers"}, 400)
                 return
             if not (0 <= hour <= 23 and 0 <= minute <= 59):
-                self._json({"error": "hour 需在 0-23，minute 需在 0-59"}, 400)
+                self._json({"error": "hour must be 0-23 and minute 0-59"}, 400)
                 return
             tz_name = payload.get("timezone") or load_config()["timezone"]
             if tz_name not in available_timezones():
-                self._json({"error": f"未知时区 {tz_name}"}, 400)
+                self._json({"error": f"unknown timezone: {tz_name}"}, 400)
                 return
             self._json({"steps": set_schedule(hour, minute, tz_name),
                         "status": status()})

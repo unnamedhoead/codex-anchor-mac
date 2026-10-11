@@ -1,10 +1,10 @@
 # runtime artifacts, not source
-warmup.log
+anchor.log
 launchd.out.log
 launchd.err.log
 ui.out.log
 ui.err.log
-.warmup.lock/
+.anchor.lock/
 .stub-codex
 .stub2
 *.bak

@@ -5,9 +5,10 @@
 set -uo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG="$DIR/warmup.log"
-LOCK="$DIR/.warmup.lock"   # a directory: mkdir is the atomic test-and-set
-TIMEOUT_SECS="${WARMUP_TIMEOUT_SECS:-240}"
+LOG="$DIR/anchor.log"
+LOCK="$DIR/.anchor.lock"   # a directory: mkdir is the atomic test-and-set
+TIMEOUT_SECS="${ANCHOR_TIMEOUT_SECS:-240}"
+LABEL="io.github.codex-anchor-mac"
 
 # Codex ships several ways on macOS: bundled inside ChatGPT.app, as a
 # standalone app, or installed by npm/brew onto PATH. Try each in turn.
@@ -40,7 +41,7 @@ fi
 
 # Never let a manual run and the scheduled run overlap.
 if ! mkdir "$LOCK" 2>/dev/null; then
-  log "SKIP  another warmup run is already in progress"
+  log "SKIP  another anchor run is already in progress"
   exit 0
 fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
@@ -49,6 +50,53 @@ if [ -z "$CODEX" ] || [ ! -x "$CODEX" ]; then
   log "FAIL  codex binary not found (set CODEX_BIN to override)"
   exit 1
 fi
+
+# Two things can silently desynchronise between runs, and both would otherwise
+# only show up as a schedule that quietly fires at the wrong time.
+self_check() {
+  local cfg="$DIR/config.json" plist="$HOME/Library/LaunchAgents/$LABEL.plist"
+  [ -f "$cfg" ] || return 0
+  /usr/bin/python3 - "$cfg" "$plist" <<'PYCHK'
+import json, os, plistlib, sys
+
+cfg_path, plist_path = sys.argv[1], sys.argv[2]
+try:
+    cfg = json.load(open(cfg_path, encoding="utf-8"))
+except Exception as exc:
+    print(f"config.json unreadable ({exc})")
+    raise SystemExit(0)
+
+try:
+    link = os.readlink("/etc/localtime").split("zoneinfo/", 1)
+    system_tz = link[1] if len(link) == 2 else "UTC"
+except OSError:
+    system_tz = "UTC"
+
+computed_under = cfg.get("computedUnderSystemTimezone")
+if computed_under and computed_under != system_tz:
+    print(f"system timezone is {system_tz} but the schedule was computed for "
+          f"{computed_under}; re-save it in the panel")
+
+try:
+    with open(plist_path, "rb") as fh:
+        cal = plistlib.load(fh).get("StartCalendarInterval") or {}
+except Exception:
+    raise SystemExit(0)
+
+# When the chosen zone IS the system zone, the plist should hold exactly the
+# configured time. Any other pairing is a conversion we cannot re-verify here.
+if cfg.get("timezone") == system_tz:
+    want = (cfg.get("hour"), cfg.get("minute"))
+    got = (cal.get("Hour"), cal.get("Minute"))
+    if None not in want and want != got:
+        print(f"config says {want[0]:02d}:{want[1]:02d} but launchd is set to "
+              f"{got[0]:02d}:{got[1]:02d}; re-save it in the panel")
+PYCHK
+}
+
+while IFS= read -r issue; do
+  [ -n "$issue" ] && log "WARN  $issue"
+done < <(self_check 2>/dev/null)
 
 PROMPT='Read README.md in the current directory and print only its first 100 characters. Do nothing else.'
 

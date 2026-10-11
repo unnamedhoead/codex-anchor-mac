@@ -1,0 +1,19 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    # The whole point of this project is macOS-specific behaviour, so testing
+    # anywhere else would prove nothing.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run smoke tests
+        # The TCC guard check needs ~/Documents to exist on the runner.
+        run: |
+          mkdir -p "$HOME/Documents"
+          ./test.sh

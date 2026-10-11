@@ -1,6 +1,6 @@
 #!/bin/bash
 # Install the localhost control panel. Separate from install.sh on purpose:
-# the warmup job must keep working even if the panel is broken or removed.
+# the anchor job must keep working even if the panel is broken or removed.
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

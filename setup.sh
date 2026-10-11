@@ -3,7 +3,7 @@
 # state rather than stacking up duplicates.
 #
 #   ./setup.sh                 job + control panel + daily wake
-#   ./setup.sh --no-panel      just the warmup job
+#   ./setup.sh --no-panel      just the anchor job
 #   ./setup.sh --no-wake       skip the admin prompt entirely
 set -euo pipefail
 
@@ -29,8 +29,8 @@ case "$DIR/" in
     exit 1 ;;
 esac
 
-echo "==> 1/3  warmup job"
-WARMUP_INSTALL_SUDOERS=$WAKE SKIP_WAKE=$((1 - WAKE)) "$DIR/install.sh"
+echo "==> 1/3  anchor job"
+ANCHOR_INSTALL_SUDOERS=$WAKE SKIP_WAKE=$((1 - WAKE)) "$DIR/install.sh"
 
 if [ "$PANEL" = "1" ]; then
   echo
@@ -46,4 +46,4 @@ fi
 
 echo
 echo "Done. Check tomorrow's run with:"
-echo "  tail -3 $DIR/warmup.log"
+echo "  tail -3 $DIR/anchor.log"
