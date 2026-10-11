@@ -104,6 +104,76 @@ def to_local(hour: int, minute: int, tz_name: str) -> tuple[int, int]:
     return local.hour, local.minute
 
 
+# 598 IANA zones is an unusable dropdown. Collapsing by *current* offset would
+# be wrong, though: Europe/London and Africa/Abidjan agree in January and
+# differ in July. Group by the (January, July) offset pair instead, so each
+# entry stands for one real set of rules, DST included.
+_PREFERRED = (
+    "Asia/Shanghai", "Asia/Tokyo", "Asia/Seoul", "Asia/Singapore", "Asia/Kolkata",
+    "Asia/Dubai", "Asia/Bangkok", "Asia/Jakarta", "Asia/Karachi", "Asia/Tehran",
+    "Asia/Jerusalem", "Asia/Kathmandu", "Asia/Yangon", "Asia/Kabul",
+    "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Moscow",
+    "Europe/Lisbon", "Europe/Athens", "Europe/Dublin",
+    "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
+    "America/Los_Angeles", "America/Anchorage", "America/Sao_Paulo",
+    "America/Mexico_City", "America/Bogota", "America/Halifax", "America/St_Johns",
+    "Pacific/Auckland", "Pacific/Honolulu", "Pacific/Fiji", "Pacific/Chatham",
+    "Australia/Sydney", "Australia/Brisbane", "Australia/Adelaide",
+    "Australia/Perth", "Australia/Darwin", "Australia/Lord_Howe",
+    "Africa/Cairo", "Africa/Lagos", "Africa/Johannesburg", "Africa/Nairobi",
+    "Africa/Abidjan", "Atlantic/Azores", "UTC",
+    # Slots with no obvious big city; pick the most recognisable inhabited place
+    # rather than letting an Etc/GMT* or legacy US/* name win on length.
+    "Pacific/Pago_Pago", "America/Adak", "Pacific/Gambier", "Pacific/Pitcairn",
+    "America/Caracas", "Atlantic/South_Georgia", "Atlantic/Cape_Verde",
+    "Asia/Dhaka", "Pacific/Guadalcanal", "Pacific/Tongatapu",
+    "Pacific/Kiritimati", "Pacific/Marquesas",
+)
+
+
+def _offset_label(delta) -> str:
+    total = int(delta.total_seconds()) // 60
+    sign = "+" if total >= 0 else "-"
+    return f"UTC{sign}{abs(total) // 60:02d}:{abs(total) % 60:02d}"
+
+
+def timezone_choices() -> list[dict]:
+    """One entry per distinct set of rules, sorted by offset, plus this Mac's."""
+    rank = {name: i for i, name in enumerate(_PREFERRED)}
+    groups: dict[tuple, list[str]] = {}
+    for name in available_timezones():
+        try:
+            tz = ZoneInfo(name)
+            jan = datetime(2026, 1, 15, 12, tzinfo=tz).utcoffset()
+            jul = datetime(2026, 7, 15, 12, tzinfo=tz).utcoffset()
+        except Exception:
+            continue
+        groups.setdefault((jan, jul), []).append(name)
+
+    out = []
+    for (jan, jul), names in groups.items():
+        # Prefer a city people recognise; fall back to the shortest name.
+        pick = min(names, key=lambda n: (rank.get(n, 10_000), len(n), n))
+        label = _offset_label(jan)
+        if jan != jul:
+            label += f" / {_offset_label(jul)} DST"
+        out.append({"name": pick, "label": f"{label}  {pick}", "sort": jan})
+
+    sys_tz = system_timezone()
+    if sys_tz not in {c["name"] for c in out}:
+        try:
+            off = datetime(2026, 1, 15, 12, tzinfo=ZoneInfo(sys_tz)).utcoffset()
+        except Exception:
+            off = None
+        out.append({"name": sys_tz, "label": f"{sys_tz} (this Mac)",
+                    "sort": off or jan})
+
+    out.sort(key=lambda c: (c["sort"], c["name"]))
+    for c in out:
+        del c["sort"]
+    return out
+
+
 def timezone_drifted(cfg: dict) -> bool:
     return cfg.get("computedUnderSystemTimezone") != system_timezone()
 
@@ -180,7 +250,7 @@ def status() -> dict:
         "pmsetWake": pmset_wake(),
         "expectedWake": f"{wh:02d}:{wm:02d}" if wh is not None else None,
         "runs": recent_runs(),
-        "timezones": sorted(available_timezones()),
+        "timezones": timezone_choices(),
     }
 
 

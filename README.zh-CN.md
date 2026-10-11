@@ -15,7 +15,7 @@
   [OpenAI 官方 pricing 文档](https://developers.openai.com/codex/pricing)写明
   Pro 目前完全没有 5 小时限额。Pro 用户没有窗口可锚定，真正卡人的是周限额，
   所以这个工具对你没用。
-- **macOS，不跨平台。** 其他平台见下方[其他平台](#其他平台)。
+- **macOS，不跨平台。**
 
 ---
 
@@ -114,8 +114,13 @@ cd ~/codex-anchor-mac && ./setup.sh
 
 ## 时区
 
-launchd 只认系统时钟。面板允许你选任意 IANA 时区，写入计划前会换算成系统本地时间，
-所以「`04:30 Asia/Shanghai`」在你的机器上会变成对应的本地时刻。
+launchd 只认系统时钟。面板写入计划前会换算成系统本地时间，所以
+「`04:30 Asia/Shanghai`」在你的机器上会变成对应的本地时刻。
+
+下拉框里是 58 个时区，不是全部 598 个。去重的键是**（1 月偏移, 7 月偏移）**这一对，
+所以每一项代表一套真实的规则、含夏令时在内——若改用「当前偏移」去重，
+Europe/London 和 Africa/Abidjan 会被并成一项，而它们有半年时间是不同的。
+你本机的时区始终在列表里。
 
 如果系统时区之后变了——你出差了——面板会显示横幅，点一次重新同步即可。避免把时间设在
 你所在地区的夏令时跳变区间（通常是 01:00–03:00），那个墙钟时刻在跳变当天可能不存在。
@@ -159,14 +164,6 @@ CI 在 `macos-latest` 上运行。
   `[machine slept mid-run; anchor landed late]`，说明在你那里没生效——请附上电源日志
   提 issue。
 - 窗口行为由 OpenAI 服务端决定，随时可能变。权威的重置时间以 Codex 里的 `/status` 为准。
-
-## 其他平台
-
-本工具刻意不假装跨平台。Windows 和 Linux 上不存在上述电源管理问题，推荐：
-
-- [benthompsondev/usageloop](https://github.com/benthompsondev/usageloop) —— Codex，Windows 和 Linux
-- [d0whc3r/agent-warmup](https://github.com/d0whc3r/agent-warmup) —— 多家供应商，跨平台
-- [vdsmon/claude-warmup](https://github.com/vdsmon/claude-warmup) —— Claude Code，走 GitHub Actions
 
 ## 卸载
 

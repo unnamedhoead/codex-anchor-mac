@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Codex Warmup</title>
+<title>Codex Anchor</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%E2%8F%B0%3C/text%3E%3C/svg%3E">
 <style>
   :root {
@@ -68,7 +68,7 @@
 <div class="wrap">
   <div class="row" style="justify-content:space-between;align-items:flex-start">
     <div>
-      <h1>Codex Warmup</h1>
+      <h1>Codex Anchor</h1>
       <p class="sub" data-i18n="sub"></p>
     </div>
     <button id="lang" style="padding:5px 11px;font-size:13px">中文</button>
@@ -90,7 +90,7 @@
   <div class="card">
     <h2 data-i18n="changeTime"></h2>
     <div class="row">
-      <select id="tzpick" style="font:14px var(--mono);padding:8px 10px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg);max-width:230px"></select>
+      <select id="tzpick" style="font:14px var(--mono);padding:8px 10px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg);max-width:290px"></select>
       <input type="time" id="picker">
       <button class="primary" id="save" data-i18n="save"></button>
     </div>
@@ -205,7 +205,8 @@ function render(s) {
   const sel = document.getElementById('tzpick');
   if (!sel.options.length) {
     sel.innerHTML = s.timezones.map(t =>
-      `<option value="${t}"${t === s.timezone ? ' selected' : ''}>${t}</option>`).join('');
+      `<option value="${esc(t.name)}"${t.name === s.timezone ? ' selected' : ''}>` +
+      `${esc(t.label)}</option>`).join('');
   }
   if (s.time && !document.getElementById('picker').value) {
     document.getElementById('picker').value = s.time;

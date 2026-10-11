@@ -16,7 +16,7 @@ the window boundaries fall **inside** your working day instead of after it.
   [OpenAI's pricing docs](https://developers.openai.com/codex/pricing) say Pro
   plans currently have no five-hour limit at all. On Pro there is no window to
   anchor and the weekly cap is what binds, so this tool does nothing for you.
-- **macOS, not cross-platform.** See [Other platforms](#other-platforms).
+- **macOS, not cross-platform.**
 
 ---
 
@@ -126,9 +126,15 @@ sync, so they cannot drift apart.
 
 ## Timezones
 
-launchd only understands the system clock. The panel lets you choose any IANA
-timezone and converts to system-local time before writing the schedule, so
-`04:30 Asia/Shanghai` becomes whatever that is on your machine.
+launchd only understands the system clock. The panel converts to system-local
+time before writing the schedule, so `04:30 Asia/Shanghai` becomes whatever
+that is on your machine.
+
+The picker lists 58 zones, not all 598. They are collapsed by their
+*(January, July)* offset pair, so one entry stands for one real set of rules
+including DST — collapsing by current offset instead would put Europe/London
+and Africa/Abidjan in the same bucket, and they differ for half the year.
+Your Mac's own zone is always in the list.
 
 If the system timezone later changes — you travelled — the panel shows a banner
 and one click re-syncs. Avoid scheduling inside your region's DST transition
@@ -180,15 +186,6 @@ syntax). CI runs them on `macos-latest`.
   it did not work for you — please open an issue with the power log.
 - Window behaviour is decided server-side by OpenAI and can change. The
   authoritative reset time is `/status` inside Codex.
-
-## Other platforms
-
-This tool deliberately does not pretend to be cross-platform. For Windows and
-Linux, where the power-management problems above do not apply:
-
-- [benthompsondev/usageloop](https://github.com/benthompsondev/usageloop) — Codex, Windows and Linux
-- [d0whc3r/agent-warmup](https://github.com/d0whc3r/agent-warmup) — multiple providers, cross-platform
-- [vdsmon/claude-warmup](https://github.com/vdsmon/claude-warmup) — Claude Code, via GitHub Actions
 
 ## Uninstall
 
