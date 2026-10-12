@@ -226,6 +226,16 @@ def recent_runs(limit: int = 15) -> list[str]:
     return runs[-limit:]
 
 
+def last_run() -> dict | None:
+    """From the log, not launchctl: its counters reset on every re-bootstrap,
+    which made the panel claim 'never run yet' after a successful night."""
+    for line in reversed(recent_runs(50)):
+        m = re.match(r"(\S+ \S+ \S+)\s+(OK|FAIL|WARN|SKIP)\b", line)
+        if m and m.group(2) != "SKIP":
+            return {"at": m.group(1), "status": m.group(2)}
+    return None
+
+
 def status() -> dict:
     cfg = load_config()
     local_hour, local_minute = read_schedule()
@@ -247,6 +257,7 @@ def status() -> dict:
         "loaded": agent["loaded"],
         "running": agent["running"],
         "lastExit": agent["lastExit"],
+        "lastRun": last_run(),
         "pmsetWake": pmset_wake(),
         "expectedWake": f"{wh:02d}:{wm:02d}" if wh is not None else None,
         "runs": recent_runs(),

@@ -186,9 +186,10 @@ async function api(path, body) {
 function describeState(s) {
   if (!s.loaded) return T().notLoaded;
   const base = s.running ? T().running : T().loaded;
-  // "(never exited)" is launchctl's own wording; do not leak it to the UI.
-  return s.lastExit == null ? `${base} · ${T().never}`
-                            : `${base} · ${T().lastExit} ${s.lastExit}`;
+  // launchctl's run counter resets whenever the agent is re-bootstrapped, so
+  // the log is the only honest answer to "did it run last night".
+  if (s.lastRun) return `${base} · ${s.lastRun.status} ${s.lastRun.at}`;
+  return `${base} · ${T().never}`;
 }
 
 function render(s) {

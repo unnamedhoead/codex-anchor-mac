@@ -34,6 +34,10 @@ export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 
 log() { printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S %z')" "$*" >>"$LOG"; }
 
+# launchd appends to this file forever, so a failure from weeks ago keeps
+# looking like the current state. Reset it; this run owns its contents.
+: > "$DIR/launchd.err.log" 2>/dev/null || true
+
 # Keep the log from growing without bound.
 if [ -f "$LOG" ] && [ "$(wc -l <"$LOG")" -gt 2000 ]; then
   tail -n 1000 "$LOG" >"$LOG.tmp" && mv "$LOG.tmp" "$LOG"
