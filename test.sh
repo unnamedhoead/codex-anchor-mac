@@ -110,6 +110,13 @@ for f in "$PLUGIN_DIR"/io.github.codex-anchor-mac*.plist; do
   else no "$(basename "$f") parses as strict XML" "plutil is lenient; plistlib is not"; fi
 done
 
+# setup.sh's default path is the one a newcomer takes; --no-panel skips the
+# very branch that used to call the deleted installer.
+SETUP_OUT="$( "$DIR/setup.sh" --no-wake 2>&1 )"
+if ! grep -qE 'No such file|command not found|127\.0\.0\.1' <<<"$SETUP_OUT"
+then ok "setup.sh default path references nothing deleted"
+else no "setup.sh default path references nothing deleted" "$(grep -m1 -E 'No such file|command not found|127\.0\.0\.1' <<<"$SETUP_OUT")"; fi
+
 if /usr/bin/python3 -c "
 import json, pathlib
 root = pathlib.Path('$PLUGIN_DIR')
