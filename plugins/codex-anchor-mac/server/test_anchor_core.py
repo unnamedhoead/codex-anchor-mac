@@ -69,5 +69,53 @@ class Config(unittest.TestCase):
         self.assertTrue(core.CONFIG.exists())
 
 
+class HomeHealth(unittest.TestCase):
+    def test_health_reports_a_missing_script(self):
+        # Review Focus 1: the plist points somewhere that no longer exists.
+        h = core.home_health(script=pathlib.Path("/nonexistent/anchor.sh"))
+        self.assertFalse(h["scriptPresent"])
+        self.assertIn("anchor.sh", h["summary"])
+
+    def test_health_reports_version_drift(self):
+        # Review Focus 2: plugin upgraded, the copied script is stale.
+        h = core.home_health(script=core.PLUGIN_DIR / "anchor.sh",
+                             installed_version_override="0.0.1")
+        self.assertTrue(h["versionDrift"])
+        self.assertIn("0.0.1", h["summary"])
+
+    def test_health_on_a_fresh_machine_does_not_raise(self):
+        # Review Focus 3: nothing exists yet.
+        h = core.home_health(home=pathlib.Path("/nonexistent/.codex-anchor"))
+        self.assertFalse(h["homePresent"])
+        self.assertFalse(h["scriptPresent"])
+
+    def test_healthy_home_says_so(self):
+        h = core.home_health(script=core.PLUGIN_DIR / "anchor.sh",
+                             installed_version_override=core.PLUGIN_VERSION)
+        self.assertFalse(h["versionDrift"])
+        self.assertEqual(h["summary"], "healthy")
+
+    def test_status_includes_home_health(self):
+        self.assertIn("home", core.status())
+
+
+class Install(unittest.TestCase):
+    def test_declined_wake_still_reports_the_job_installed(self):
+        # Review Focus 4: cancelling the admin dialog is not an install failure.
+        import unittest.mock as mock
+
+        def fake_run(cmd):
+            if cmd[0] in ("sudo", "osascript"):
+                return 1, "User cancelled."
+            return 0, ""
+
+        with mock.patch.object(core, "run", fake_run):
+            result = core.install_home()
+        by_name = {s["step"]: s for s in result["steps"]}
+        self.assertTrue(by_name["install the launchd job"]["ok"])
+        self.assertFalse(by_name["schedule the daily wake"]["ok"])
+        self.assertIn("still runs", by_name["schedule the daily wake"]["detail"])
+
+
 if __name__ == "__main__":
     unittest.main()
