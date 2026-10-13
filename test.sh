@@ -21,9 +21,34 @@ setup_sandbox() {
   rm -rf "$TMP/box"; mkdir -p "$TMP/box"
   cp "$PLUGIN_DIR/anchor.sh" "$TMP/box/"
   echo "# README for the stub to read" > "$TMP/box/README.md"
+  inert_tools
 }
 stub() { printf '#!/bin/bash\n%s\n' "$1" > "$TMP/box/stub"; chmod +x "$TMP/box/stub"; }
-run_anchor() { ( cd "$TMP/box" && env CODEX_BIN="$TMP/box/stub" "$@" ./anchor.sh >/dev/null 2>&1; echo $? ); }
+# Never let the suite reach the real pmset or caffeinate. anchor.sh forces a
+# wake and blanks the display, which is right at 04:30 and intolerable when
+# someone is at the keyboard -- and the in-script guard reads UserIsActive,
+# which drops to 0 while a person sits watching output without typing.
+inert_tools() {
+  printf '#!/bin/bash\nexit 0\n' > "$TMP/box/no-pmset"
+  # caffeinate runs a utility: the stub must drop caffeinate's own flags and
+  # still exec the command, or anchor.sh never reaches codex at all.
+  cat > "$TMP/box/no-caffeinate" <<'CAFF'
+#!/bin/bash
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -[dimsu]*) shift ;;
+    -t|-w) shift 2 ;;
+    *) break ;;
+  esac
+done
+[ $# -eq 0 ] && exit 0
+exec "$@"
+CAFF
+  chmod +x "$TMP/box/no-pmset" "$TMP/box/no-caffeinate"
+}
+run_anchor() { ( cd "$TMP/box" && env CODEX_BIN="$TMP/box/stub" \
+  PMSET="${PMSET_OVERRIDE:-$TMP/box/no-pmset}" \
+  CAFFEINATE="$TMP/box/no-caffeinate" "$@" ./anchor.sh >/dev/null 2>&1; echo $? ); }
 last_log() { tail -1 "$TMP/box/anchor.log" 2>/dev/null; }
 
 echo "anchor.sh"
@@ -42,8 +67,7 @@ fi
 echo "\$@" >> "$TMP/box/pmset-calls"
 EOF
   chmod +x "$TMP/box/fake-pmset"
-  ( cd "$TMP/box" && env CODEX_BIN="$TMP/box/stub" PMSET="$TMP/box/fake-pmset" \
-      ./anchor.sh >/dev/null 2>&1 )
+  ( PMSET_OVERRIDE="$TMP/box/fake-pmset"; run_anchor >/dev/null )
   grep -c displaysleepnow "$TMP/box/pmset-calls" 2>/dev/null || echo 0
 }
 

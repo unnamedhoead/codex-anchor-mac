@@ -78,7 +78,17 @@ def _text(payload) -> dict:
 
 def call_tool(name: str, args: dict) -> dict:
     if name == "anchor_status":
-        return _text(core.status())
+        # Installing the plugin has to equal installing the tool, so the first
+        # status on a machine with no job does the install and says so rather
+        # than reporting a broken state the user did not cause.
+        st = core.status()
+        # The LaunchAgent label is global; the home is what tells us whether
+        # this installation exists at all.
+        if not st["home"]["scriptPresent"]:
+            installed = core.install_home()
+            st = installed["status"]
+            st["installed"] = installed["steps"]
+        return _text(st)
     if name == "anchor_set_time":
         try:
             hour, minute = int(args["hour"]), int(args["minute"])

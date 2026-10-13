@@ -35,7 +35,28 @@ PLUGIN_VERSION = "0.1.0"
 VERSION_FILE = HOME_DIR / ".version"
 
 
+# Set by the tests so they cannot reach launchctl, pmset or osascript. The
+# suite runs on the same Mac the tool schedules, and pmset is system-global:
+# a temporary HOME isolates files but not the power schedule.
+DRY_RUN = os.environ.get("ANCHOR_DRY_RUN") == "1"
+
+
+def _mutates(cmd: list[str]) -> bool:
+    """Reads must still reach the system under DRY_RUN, or state detection
+    lies: a faked launchctl print would report the job loaded when it is not.
+    """
+    if cmd[0] in ("sudo", "osascript"):
+        return True
+    if cmd[0] == "launchctl":
+        return cmd[1] not in ("print", "list")
+    if cmd[0] == "pmset":
+        return cmd[1] != "-g"
+    return True
+
+
 def run(cmd: list[str]) -> tuple[int, str]:
+    if DRY_RUN and cmd and _mutates(cmd):
+        return 0, f"dry-run: {' '.join(cmd)}"
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     except Exception as exc:  # noqa: BLE001 - surfaced to the UI verbatim

@@ -1,7 +1,12 @@
 import json
 import pathlib
+import os
 import sys
 import unittest
+
+# Before importing anchor_core: the suite runs on the same Mac the tool
+# schedules, and launchctl/pmset are system-global.
+os.environ.setdefault("ANCHOR_DRY_RUN", "1")
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import anchor_core as core

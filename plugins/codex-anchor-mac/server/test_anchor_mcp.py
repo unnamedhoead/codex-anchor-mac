@@ -1,3 +1,4 @@
+import os
 import json
 import pathlib
 import subprocess
@@ -7,12 +8,16 @@ import unittest
 SERVER = pathlib.Path(__file__).resolve().parent / "anchor_mcp.py"
 INIT = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
 
+# The suite runs on the same Mac the tool schedules, and pmset is global.
+os.environ.setdefault("ANCHOR_DRY_RUN", "1")
+
 
 def talk(requests: list) -> list:
     """Drive the server over stdio the way a host would."""
     payload = "".join(json.dumps(r) + "\n" for r in requests)
     p = subprocess.run([sys.executable, str(SERVER)], input=payload,
-                       capture_output=True, text=True, timeout=30)
+                       capture_output=True, text=True, timeout=30,
+                       env={**os.environ, "ANCHOR_DRY_RUN": "1"})
     return [json.loads(line) for line in p.stdout.splitlines() if line.strip()]
 
 
@@ -66,6 +71,32 @@ class Protocol(unittest.TestCase):
         body = json.loads(out[1]["result"]["content"][0]["text"])
         self.assertIn("timezone", body)
         self.assertIn("runs", body)
+
+
+class FirstRun(unittest.TestCase):
+    def test_status_installs_the_job_when_it_is_missing(self):
+        """Installing the plugin must equal installing the tool.
+
+        Driven through a fake HOME so it cannot touch the real schedule.
+        """
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as home:
+            os.makedirs(os.path.join(home, "Library", "LaunchAgents"))
+            env = {**os.environ, "HOME": home, "ANCHOR_DRY_RUN": "1"}
+            payload = (json.dumps(INIT) + "\n" + json.dumps(
+                {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                 "params": {"name": "anchor_status", "arguments": {}}}) + "\n")
+            p = subprocess.run([sys.executable, str(SERVER)], input=payload,
+                               capture_output=True, text=True, timeout=60, env=env)
+            out = [json.loads(l) for l in p.stdout.splitlines() if l.strip()]
+            body = json.loads(out[1]["result"]["content"][0]["text"])
+            self.assertIn("installed", body,
+                          "first status should report what it installed")
+            self.assertTrue(
+                os.path.isfile(os.path.join(home, ".codex-anchor", "anchor.sh")),
+                "first status should have copied anchor.sh into the home")
 
 
 if __name__ == "__main__":
