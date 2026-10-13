@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "codex_anchor": {
+      "type": "stdio",
+      "command": "/usr/bin/python3",
+      "args": ["${PLUGIN_ROOT}/server/anchor_mcp.py"],
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}

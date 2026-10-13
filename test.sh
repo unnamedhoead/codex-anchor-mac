@@ -124,6 +124,23 @@ for f in "$PLUGIN_DIR"/io.github.codex-anchor-mac*.plist "$DIR"/io.github.codex-
   else no "$(basename "$f") parses as strict XML" "plutil is lenient; plistlib is not"; fi
 done
 
+if /usr/bin/python3 -c "
+import json, pathlib
+root = pathlib.Path('$PLUGIN_DIR')
+a = json.load(open(root/'plugin.json'))
+b = json.load(open(root/'.codex-plugin'/'plugin.json'))
+assert a['name'] == b['name'] == 'codex-anchor-mac'
+assert a['version'] == b['version']
+assert b['mcpServers'] == './.mcp.json'
+m = json.load(open(root/'.mcp.json'))
+args = m['mcpServers']['codex_anchor']['args'][0]
+assert args.endswith('server/anchor_mcp.py'), args
+assert (root/'server'/'anchor_mcp.py').is_file()
+assert (root/a['extensions']['com.openai']['interface']['logo'][2:]).is_file()
+" 2>/dev/null
+then ok "plugin manifests agree and point at real files"
+else no "plugin manifests agree and point at real files"; fi
+
 PANEL="$PLUGIN_DIR/ui/dist/panel.html"
 if [ -s "$PANEL" ] && ! grep -qE 'src="http|href="http|fetch\(' "$PANEL"
 then ok "built panel references no external origin"
