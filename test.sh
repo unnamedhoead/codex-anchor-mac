@@ -6,6 +6,7 @@
 set -uo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_DIR="$DIR/plugins/codex-anchor-mac"
 PASS=0; FAIL=0
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -18,7 +19,7 @@ has()  { case "$2" in *"$3"*) ok "$1";; *) no "$1" "[$2] does not contain [$3]";
 # --- anchor.sh, against a stub -------------------------------------------
 setup_sandbox() {
   rm -rf "$TMP/box"; mkdir -p "$TMP/box"
-  cp "$DIR/anchor.sh" "$TMP/box/"
+  cp "$PLUGIN_DIR/anchor.sh" "$TMP/box/"
   echo "# README for the stub to read" > "$TMP/box/README.md"
 }
 stub() { printf '#!/bin/bash\n%s\n' "$1" > "$TMP/box/stub"; chmod +x "$TMP/box/stub"; }
@@ -108,16 +109,28 @@ OUT=$( cd "$HOME/Documents/.anchor-tcc-probe" && ./setup.sh --no-wake --no-panel
 rm -rf "$HOME/Documents/.anchor-tcc-probe"
 has "setup.sh refuses a TCC-protected folder" "$OUT" "TCC-protected"
 
-for f in "$DIR"/io.github.codex-anchor-mac*.plist; do
+# The UI plist is still at the root until Task 7 retires it.
+for f in "$PLUGIN_DIR"/io.github.codex-anchor-mac*.plist "$DIR"/io.github.codex-anchor-mac*.plist; do
   if /usr/bin/python3 -c "import plistlib,sys;plistlib.load(open(sys.argv[1],'rb'))" "$f" 2>/dev/null
   then ok "$(basename "$f") parses as strict XML"
   else no "$(basename "$f") parses as strict XML" "plutil is lenient; plistlib is not"; fi
 done
 
-if visudo -c -f <(sed "s|__USER__|$(id -un)|g" "$DIR/sudoers.codex-anchor-mac.template") >/dev/null 2>&1
+MKT="$DIR/.agents/plugins/marketplace.json"
+if /usr/bin/python3 -c "
+import json,pathlib
+d=json.load(open('$MKT'))
+p=d['plugins'][0]
+assert p['source']['path']=='plugins/codex-anchor-mac', p['source']['path']
+assert pathlib.Path('$DIR', p['source']['path']).is_dir()
+" 2>/dev/null
+then ok "marketplace manifest points at a real plugin directory"
+else no "marketplace manifest points at a real plugin directory"; fi
+
+if visudo -c -f <(sed "s|__USER__|$(id -un)|g" "$PLUGIN_DIR/sudoers.codex-anchor-mac.template") >/dev/null 2>&1
 then ok "sudoers template is valid"; else no "sudoers template is valid"; fi
 
-for s in "$DIR"/*.sh; do
+for s in "$DIR"/*.sh "$PLUGIN_DIR"/*.sh; do
   bash -n "$s" 2>/dev/null && ok "$(basename "$s") parses" || no "$(basename "$s") parses"
 done
 

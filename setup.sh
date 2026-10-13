@@ -8,6 +8,7 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_DIR="$DIR/plugins/codex-anchor-mac"
 PANEL=1; WAKE=1
 for a in "$@"; do
   case "$a" in
@@ -30,7 +31,7 @@ case "$DIR/" in
 esac
 
 echo "==> 1/3  anchor job"
-ANCHOR_INSTALL_SUDOERS=$WAKE SKIP_WAKE=$((1 - WAKE)) "$DIR/install.sh"
+ANCHOR_INSTALL_SUDOERS=$WAKE SKIP_WAKE=$((1 - WAKE)) PLUGIN_DIR="$PLUGIN_DIR" "$DIR/install.sh"
 
 if [ "$PANEL" = "1" ]; then
   echo
@@ -46,4 +47,4 @@ fi
 
 echo
 echo "Done. Check tomorrow's run with:"
-echo "  tail -3 $DIR/anchor.log"
+echo "  tail -3 $HOME/.codex-anchor/anchor.log"
