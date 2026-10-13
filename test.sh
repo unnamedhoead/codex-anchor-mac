@@ -100,6 +100,12 @@ is "to_local is identity for the system zone" "$(echo "$TZOUT" | sed -n 1p)" "04
 is "to_local tolerates an unknown zone"       "$(echo "$TZOUT" | sed -n 2p)" "04:30"
 is "wake_time wraps past midnight"            "$(echo "$TZOUT" | sed -n 3p)" "23:58"
 
+# --- anchor_core -----------------------------------------------------------
+echo
+echo "anchor_core"
+if /usr/bin/python3 "$PLUGIN_DIR/server/test_anchor_core.py" >/dev/null 2>&1
+then ok "anchor_core unit tests"; else no "anchor_core unit tests"; fi
+
 # --- guards ---------------------------------------------------------------
 echo
 echo "guards"
