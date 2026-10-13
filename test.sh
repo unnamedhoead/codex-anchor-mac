@@ -186,8 +186,13 @@ b = json.load(open(root/'.codex-plugin'/'plugin.json'))
 assert a['name'] == b['name'] == 'codex-anchor-mac'
 assert a['version'] == b['version']
 assert b['mcpServers'] == './.mcp.json'
-m = json.load(open(root/'.mcp.json'))
-args = m['mcpServers']['codex_anchor']['args'][0]
+# Both spellings must exist and agree: Codex's agent-plugins loader reads
+# mcp.json, while .codex-plugin/plugin.json points at .mcp.json. Shipping
+# only the dotted one installs a plugin whose tools never appear.
+dotted = json.load(open(root/'.mcp.json'))
+plain = json.load(open(root/'mcp.json'))
+assert dotted['mcpServers'] == plain['mcpServers'], 'mcp.json files disagree'
+args = plain['mcpServers']['codex_anchor']['args'][0]
 assert args.endswith('server/anchor_mcp.py'), args
 assert (root/'server'/'anchor_mcp.py').is_file()
 assert (root/a['extensions']['com.openai']['interface']['logo'][2:]).is_file()
