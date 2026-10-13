@@ -88,14 +88,22 @@ Inside Codex:
 ```bash
 codex plugin marketplace add https://github.com/unnamedhoead/codex-anchor-mac.git
 codex plugin add codex-anchor-mac@codex-anchor-mac
+python3 ~/.codex/plugins/cache/codex-anchor-mac/codex-anchor-mac/*/scripts/register_mcp.py
 ```
 
-Then ask Codex to open the anchor panel. Installing the plugin installs the
-daily job; there is nothing else to run. The first time the panel opens it
-creates `~/.codex-anchor/`, installs the launchd job, and offers to schedule
-the daily wake through the standard macOS authorization dialog. You can
-decline that last part: the job still runs, it is just late on nights the Mac
-is asleep on battery.
+Then open a **new** Codex session and ask it to open the anchor panel.
+
+The third line is not optional and not a bug in your setup: Codex installs
+the plugin and marks it enabled, but it does not read `mcp.json` and start
+the server, so without it the plugin is installed and its tools never appear.
+Re-run it after upgrading the plugin — the cache path carries the version, so
+the old registration points at a directory that no longer exists.
+
+Installing the plugin installs the daily job: the first time the panel opens
+it creates `~/.codex-anchor/`, installs the launchd job, and offers to
+schedule the daily wake through the standard macOS authorization dialog. You
+can decline that last part — the job still runs, it is just late on nights
+the Mac is asleep on battery.
 
 Without Codex, the job works on its own, without a panel:
 

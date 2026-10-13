@@ -80,11 +80,18 @@ anchor 时刻 = 起床时间 + 一个窗口能撑多久 − 5h
 ```bash
 codex plugin marketplace add https://github.com/unnamedhoead/codex-anchor-mac.git
 codex plugin add codex-anchor-mac@codex-anchor-mac
+python3 ~/.codex/plugins/cache/codex-anchor-mac/codex-anchor-mac/*/scripts/register_mcp.py
 ```
 
-然后让 Codex 打开锚点面板。**装插件就等于装好了定时任务**，没有别的步骤。面板首次打开
-时会创建 `~/.codex-anchor/`、装好 launchd 任务，并通过 macOS 标准授权弹窗询问是否设置
-每日唤醒。最后这步**可以拒绝**：任务照常运行，只是在没插电、机器睡着的夜里会迟到。
+然后开一个**新的** Codex 会话，让它打开锚点面板。
+
+第三行不是可选项，也不是你装错了：Codex 会安装插件并标记为 enabled，但**不会**读
+`mcp.json` 去启动 server——少了这一步，插件装上了而工具永远不出现。插件升级后要重跑一次，
+因为缓存路径里带版本号，旧注册会指向一个已经不存在的目录。
+
+装插件就等于装好了定时任务：面板首次打开时会创建 `~/.codex-anchor/`、装好 launchd 任务，
+并通过 macOS 标准授权弹窗询问是否设置每日唤醒。最后这步**可以拒绝**：任务照常运行，只是
+在没插电、机器睡着的夜里会迟到。
 
 不用 Codex 的话，任务本身也能独立工作，只是没有面板：
 

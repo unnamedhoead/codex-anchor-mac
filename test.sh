@@ -140,6 +140,7 @@ run_unittests() {
 
 run_unittests "$PLUGIN_DIR/server/test_anchor_core.py" "core"
 run_unittests "$PLUGIN_DIR/server/test_anchor_mcp.py" "mcp"
+run_unittests "$PLUGIN_DIR/scripts/test_register_mcp.py" "register"
 
 # --- guards ---------------------------------------------------------------
 echo
