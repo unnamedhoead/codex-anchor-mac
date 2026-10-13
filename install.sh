@@ -43,7 +43,19 @@ echo "==> writing $TARGET"
 mkdir -p "$HOME/Library/LaunchAgents"
 mkdir -p "$HOME_DIR"
 cp "$PLUGIN_DIR/anchor.sh" "$HOME_DIR/anchor.sh" && chmod +x "$HOME_DIR/anchor.sh"
-sed -e "s|__ANCHOR_SH__|$HOME_DIR/anchor.sh|g" -e "s|__DIR__|$HOME_DIR|g" "$TEMPLATE" >"$TARGET"
+# Render the trigger time from config.json as well, so it cannot come from a
+# stale value frozen into the template while the wake time comes from config.
+sed -e "s|__ANCHOR_SH__|$HOME_DIR/anchor.sh|g" -e "s|__DIR__|$HOME_DIR|g" "$TEMPLATE" \
+  | /usr/bin/python3 -c "
+import json, os, re, sys
+try: c = json.load(open(os.path.expanduser('~/.codex-anchor/config.json')))
+except Exception: c = {}
+h, m = int(c.get('hour', 4)), int(c.get('minute', 30))
+s = sys.stdin.read()
+s = re.sub(r'(<key>Hour</key>\s*<integer>)\d+(</integer>)', rf'\g<1>{h}\g<2>', s, count=1)
+s = re.sub(r'(<key>Minute</key>\s*<integer>)\d+(</integer>)', rf'\g<1>{m}\g<2>', s, count=1)
+sys.stdout.write(s)
+" >"$TARGET"
 plutil -lint "$TARGET"
 
 echo "==> (re)loading the LaunchAgent"

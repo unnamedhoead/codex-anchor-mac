@@ -9,6 +9,9 @@ LOG="$DIR/anchor.log"
 LOCK="$DIR/.anchor.lock"   # a directory: mkdir is the atomic test-and-set
 TIMEOUT_SECS="${ANCHOR_TIMEOUT_SECS:-240}"
 LABEL="io.github.codex-anchor-mac"
+# Overridable so the tests can observe these without touching the real display.
+PMSET="${PMSET:-/usr/bin/pmset}"
+CAFFEINATE="${CAFFEINATE:-/usr/bin/caffeinate}"
 
 # Codex ships several ways on macOS: bundled inside ChatGPT.app, as a
 # standalone app, or installed by npm/brew onto PATH. Try each in turn.
@@ -112,10 +115,15 @@ START_EPOCH=$(date +%s)
 # the only flag that forces a real wake (-s is AC-only, see caffeinate(1)), so
 # declare user activity to escape DarkWake, then blank the display again right
 # away -- nobody wants a laptop lighting up at 04:30.
-/usr/bin/caffeinate -u -t 1 2>/dev/null
-/usr/bin/pmset displaysleepnow 2>/dev/null
+# ...but only when nobody is at the keyboard. Forcing a wake flashes the
+# display, and this script also runs from the test suite, which would strobe
+# the screen of whoever is working on it.
+if ! "$PMSET" -g assertions 2>/dev/null | grep -qE '^[[:space:]]*UserIsActive[[:space:]]+1'; then
+  "$CAFFEINATE" -u -t 1 2>/dev/null
+  "$PMSET" displaysleepnow 2>/dev/null
+fi
 
-/usr/bin/caffeinate -i -s "$CODEX" exec \
+"$CAFFEINATE" -i -s "$CODEX" exec \
   --ephemeral \
   --skip-git-repo-check \
   -C "$DIR" \

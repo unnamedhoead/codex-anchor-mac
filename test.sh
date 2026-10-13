@@ -28,6 +28,28 @@ last_log() { tail -1 "$TMP/box/anchor.log" 2>/dev/null; }
 
 echo "anchor.sh"
 
+# Nobody wants their screen flashed while they are using the Mac. The test
+# suite itself exposed this: it runs anchor.sh ten times per pass.
+screen_probe() {
+  local active="$1"
+  setup_sandbox; stub 'echo ok; exit 0'
+  cat > "$TMP/box/fake-pmset" <<EOF
+#!/bin/bash
+if [ "\$1" = "-g" ] && [ "\$2" = "assertions" ]; then
+  echo "   UserIsActive                   $active"
+  exit 0
+fi
+echo "\$@" >> "$TMP/box/pmset-calls"
+EOF
+  chmod +x "$TMP/box/fake-pmset"
+  ( cd "$TMP/box" && env CODEX_BIN="$TMP/box/stub" PMSET="$TMP/box/fake-pmset" \
+      ./anchor.sh >/dev/null 2>&1 )
+  grep -c displaysleepnow "$TMP/box/pmset-calls" 2>/dev/null || echo 0
+}
+
+is "leaves the display alone while someone is using the Mac" "$(screen_probe 1)" "0"
+is "still forces a wake when nobody is active" "$(screen_probe 0)" "1"
+
 setup_sandbox; stub 'echo "stub replied"; exit 0'
 is "exits 0 on success" "$(run_anchor)" "0"
 has "logs OK" "$(last_log)" "OK"
@@ -112,6 +134,21 @@ done
 
 # setup.sh's default path is the one a newcomer takes; --no-panel skips the
 # very branch that used to call the deleted installer.
+# The CLI installer must take its trigger time from config.json, not from
+# whatever happens to be frozen in the template.
+CFG="$HOME/.codex-anchor/config.json"
+CFG_BAK="$(cat "$CFG" 2>/dev/null)"
+printf '{"timezone":"%s","hour":3,"minute":7}' "$(/usr/bin/python3 -c "
+import os;print(os.readlink('/etc/localtime').split('zoneinfo/')[1])")" > "$CFG"
+"$DIR/setup.sh" --no-wake --no-panel >/dev/null 2>&1
+TRIG="$(/usr/bin/python3 -c "
+import plistlib,pathlib
+c=plistlib.load(open(pathlib.Path.home()/'Library/LaunchAgents/io.github.codex-anchor-mac.plist','rb'))['StartCalendarInterval']
+print('%02d:%02d'%(c['Hour'],c['Minute']))")"
+is "install.sh takes its trigger time from config.json" "$TRIG" "03:07"
+[ -n "$CFG_BAK" ] && printf '%s' "$CFG_BAK" > "$CFG"
+"$DIR/setup.sh" --no-wake --no-panel >/dev/null 2>&1
+
 SETUP_OUT="$( "$DIR/setup.sh" --no-wake 2>&1 )"
 if ! grep -qE 'No such file|command not found|127\.0\.0\.1' <<<"$SETUP_OUT"
 then ok "setup.sh default path references nothing deleted"

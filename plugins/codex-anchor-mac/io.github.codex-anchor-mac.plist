@@ -14,9 +14,9 @@
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>18</integer>
+        <integer>4</integer>
         <key>Minute</key>
-        <integer>10</integer>
+        <integer>30</integer>
     </dict>
 
     <!-- false so the job does not fire on every login. launchd still catches up
