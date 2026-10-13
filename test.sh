@@ -105,6 +105,8 @@ echo
 echo "anchor_core"
 if /usr/bin/python3 "$PLUGIN_DIR/server/test_anchor_core.py" >/dev/null 2>&1
 then ok "anchor_core unit tests"; else no "anchor_core unit tests"; fi
+if /usr/bin/python3 "$PLUGIN_DIR/server/test_anchor_mcp.py" >/dev/null 2>&1
+then ok "anchor_mcp protocol tests"; else no "anchor_mcp protocol tests"; fi
 
 # --- guards ---------------------------------------------------------------
 echo
