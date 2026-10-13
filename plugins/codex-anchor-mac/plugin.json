@@ -1,0 +1,27 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "codex-anchor-mac",
+  "version": "0.1.0",
+  "description": "Anchor your ChatGPT Plus 5-hour Codex window at a time you choose, so the boundaries fall inside your working day. macOS only. Adds no quota.",
+  "author": {
+    "name": "unnamedhoead"
+  },
+  "license": "MIT",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Codex Anchor",
+        "shortDescription": "Move your 5-hour quota window to where you need it",
+        "longDescription": "The 5-hour window starts at your first message, so a window burned by 10am leaves you waiting until 1pm. This sends one deliberately tiny request early each morning, which shifts the boundaries into your working day. It adds no quota and bypasses nothing. macOS and ChatGPT Plus only; Pro has no 5-hour limit to anchor.",
+        "developerName": "unnamedhoead",
+        "category": "Developer Tools",
+        "logo": "./assets/icon.svg",
+        "composerIcon": "./assets/icon.svg",
+        "defaultPrompt": [
+          "Open the anchor panel.",
+          "Move my daily anchor to 4:30am."
+        ]
+      }
+    }
+  }
+}

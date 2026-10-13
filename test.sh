@@ -6,6 +6,7 @@
 set -uo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_DIR="$DIR/plugins/codex-anchor-mac"
 PASS=0; FAIL=0
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -18,7 +19,7 @@ has()  { case "$2" in *"$3"*) ok "$1";; *) no "$1" "[$2] does not contain [$3]";
 # --- anchor.sh, against a stub -------------------------------------------
 setup_sandbox() {
   rm -rf "$TMP/box"; mkdir -p "$TMP/box"
-  cp "$DIR/anchor.sh" "$TMP/box/"
+  cp "$PLUGIN_DIR/anchor.sh" "$TMP/box/"
   echo "# README for the stub to read" > "$TMP/box/README.md"
 }
 stub() { printf '#!/bin/bash\n%s\n' "$1" > "$TMP/box/stub"; chmod +x "$TMP/box/stub"; }
@@ -75,29 +76,24 @@ if /usr/bin/python3 -c "import sys;open('$TMP/box/anchor.log','rb').read().decod
 then ok "log stays valid UTF-8 with CJK output"
 else no "log stays valid UTF-8 with CJK output"; fi
 
-# --- server.py ------------------------------------------------------------
+# --- anchor_core -----------------------------------------------------------
 echo
-echo "server.py"
+echo "anchor_core"
+# Report each unittest case rather than the file, so the headline count
+# reflects what is actually covered instead of hiding it behind one line.
+run_unittests() {
+  local file="$1" label="$2" out
+  out="$(/usr/bin/python3 "$file" -v 2>&1)"
+  while IFS= read -r line; do
+    case "$line" in
+      *" ... ok")   ok "$label: ${line%% (*}" ;;
+      *" ... FAIL"|*" ... ERROR") no "$label: ${line%% (*}" ;;
+    esac
+  done <<<"$out"
+}
 
-is "compiles" "$( /usr/bin/python3 -m py_compile "$DIR/server.py" >/dev/null 2>&1; echo $? )" "0"
-
-TZOUT=$(/usr/bin/python3 - "$DIR" <<'PY'
-import sys, pathlib
-src = pathlib.Path(sys.argv[1], "server.py").read_text(encoding="utf-8")
-ns = {"__name__": "test", "__file__": str(pathlib.Path(sys.argv[1], "server.py"))}
-exec(compile(src, "server.py", "exec"), ns)
-# A zone that equals the system zone must round-trip unchanged.
-h, m = ns["to_local"](4, 30, ns["system_timezone"]())
-print(f"{h:02d}:{m:02d}")
-# An unknown zone must not raise.
-print("%02d:%02d" % ns["to_local"](4, 30, "Nowhere/Nothing"))
-# The wake lead must wrap past midnight rather than go negative.
-print("%02d:%02d" % ns["wake_time"](0, 1))
-PY
-)
-is "to_local is identity for the system zone" "$(echo "$TZOUT" | sed -n 1p)" "04:30"
-is "to_local tolerates an unknown zone"       "$(echo "$TZOUT" | sed -n 2p)" "04:30"
-is "wake_time wraps past midnight"            "$(echo "$TZOUT" | sed -n 3p)" "23:58"
+run_unittests "$PLUGIN_DIR/server/test_anchor_core.py" "core"
+run_unittests "$PLUGIN_DIR/server/test_anchor_mcp.py" "mcp"
 
 # --- guards ---------------------------------------------------------------
 echo
@@ -108,16 +104,56 @@ OUT=$( cd "$HOME/Documents/.anchor-tcc-probe" && ./setup.sh --no-wake --no-panel
 rm -rf "$HOME/Documents/.anchor-tcc-probe"
 has "setup.sh refuses a TCC-protected folder" "$OUT" "TCC-protected"
 
-for f in "$DIR"/io.github.codex-anchor-mac*.plist; do
+for f in "$PLUGIN_DIR"/io.github.codex-anchor-mac*.plist; do
   if /usr/bin/python3 -c "import plistlib,sys;plistlib.load(open(sys.argv[1],'rb'))" "$f" 2>/dev/null
   then ok "$(basename "$f") parses as strict XML"
   else no "$(basename "$f") parses as strict XML" "plutil is lenient; plistlib is not"; fi
 done
 
-if visudo -c -f <(sed "s|__USER__|$(id -un)|g" "$DIR/sudoers.codex-anchor-mac.template") >/dev/null 2>&1
+# setup.sh's default path is the one a newcomer takes; --no-panel skips the
+# very branch that used to call the deleted installer.
+SETUP_OUT="$( "$DIR/setup.sh" --no-wake 2>&1 )"
+if ! grep -qE 'No such file|command not found|127\.0\.0\.1' <<<"$SETUP_OUT"
+then ok "setup.sh default path references nothing deleted"
+else no "setup.sh default path references nothing deleted" "$(grep -m1 -E 'No such file|command not found|127\.0\.0\.1' <<<"$SETUP_OUT")"; fi
+
+if /usr/bin/python3 -c "
+import json, pathlib
+root = pathlib.Path('$PLUGIN_DIR')
+a = json.load(open(root/'plugin.json'))
+b = json.load(open(root/'.codex-plugin'/'plugin.json'))
+assert a['name'] == b['name'] == 'codex-anchor-mac'
+assert a['version'] == b['version']
+assert b['mcpServers'] == './.mcp.json'
+m = json.load(open(root/'.mcp.json'))
+args = m['mcpServers']['codex_anchor']['args'][0]
+assert args.endswith('server/anchor_mcp.py'), args
+assert (root/'server'/'anchor_mcp.py').is_file()
+assert (root/a['extensions']['com.openai']['interface']['logo'][2:]).is_file()
+" 2>/dev/null
+then ok "plugin manifests agree and point at real files"
+else no "plugin manifests agree and point at real files"; fi
+
+PANEL="$PLUGIN_DIR/ui/dist/panel.html"
+if [ -s "$PANEL" ] && ! grep -qE 'src="http|href="http|fetch\(' "$PANEL"
+then ok "built panel references no external origin"
+else no "built panel references no external origin"; fi
+
+MKT="$DIR/.agents/plugins/marketplace.json"
+if /usr/bin/python3 -c "
+import json,pathlib
+d=json.load(open('$MKT'))
+p=d['plugins'][0]
+assert p['source']['path']=='plugins/codex-anchor-mac', p['source']['path']
+assert pathlib.Path('$DIR', p['source']['path']).is_dir()
+" 2>/dev/null
+then ok "marketplace manifest points at a real plugin directory"
+else no "marketplace manifest points at a real plugin directory"; fi
+
+if visudo -c -f <(sed "s|__USER__|$(id -un)|g" "$PLUGIN_DIR/sudoers.codex-anchor-mac.template") >/dev/null 2>&1
 then ok "sudoers template is valid"; else no "sudoers template is valid"; fi
 
-for s in "$DIR"/*.sh; do
+for s in "$DIR"/*.sh "$PLUGIN_DIR"/*.sh; do
   bash -n "$s" 2>/dev/null && ok "$(basename "$s") parses" || no "$(basename "$s") parses"
 done
 

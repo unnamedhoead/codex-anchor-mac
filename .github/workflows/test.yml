@@ -12,6 +12,15 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify the committed panel matches its source
+        run: |
+          cd plugins/codex-anchor-mac/ui
+          npm ci
+          cp dist/panel.html /tmp/committed.html
+          npm run build
+          diff -q /tmp/committed.html dist/panel.html \
+            || { echo "ui/dist/panel.html is stale; run npm run build"; exit 1; }
+
       - name: Run smoke tests
         # The TCC guard check needs ~/Documents to exist on the runner.
         run: |

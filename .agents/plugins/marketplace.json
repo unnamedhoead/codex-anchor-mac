@@ -1,0 +1,21 @@
+{
+  "name": "codex-anchor-mac",
+  "interface": {
+    "displayName": "Codex Anchor"
+  },
+  "plugins": [
+    {
+      "name": "codex-anchor-mac",
+      "category": "Developer Tools",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/unnamedhoead/codex-anchor-mac.git",
+        "path": "plugins/codex-anchor-mac",
+        "ref": "main"
+      },
+      "policy": {
+        "installation": "AVAILABLE"
+      }
+    }
+  ]
+}

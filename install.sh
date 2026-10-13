@@ -6,9 +6,23 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LABEL="io.github.codex-anchor-mac"
-TEMPLATE="$DIR/$LABEL.plist"
 TARGET="$HOME/Library/LaunchAgents/$LABEL.plist"
-WAKE_TIME="18:07:00"
+# The operational files live in the plugin directory so both entry points
+# share one copy, and the job's home is ~/.codex-anchor so both share one log.
+PLUGIN_DIR="${PLUGIN_DIR:-$DIR/plugins/codex-anchor-mac}"
+HOME_DIR="$HOME/.codex-anchor"
+TEMPLATE="$PLUGIN_DIR/$LABEL.plist"
+# Derived from config.json, which the panel also writes; a constant here
+# would silently diverge the moment the panel changed the time.
+WAKE_TIME="$(/usr/bin/python3 -c "
+import json,os,sys
+p=os.path.expanduser('~/.codex-anchor/config.json')
+try: c=json.load(open(p))
+except Exception: c={}
+h,m=int(c.get('hour',4)),int(c.get('minute',30))
+t=(h*60+m-3)%1440
+print('%02d:%02d:00'%(t//60,t%60))
+")"
 
 [ -f "$TEMPLATE" ] || { echo "missing $TEMPLATE" >&2; exit 1; }
 
@@ -27,7 +41,9 @@ esac
 
 echo "==> writing $TARGET"
 mkdir -p "$HOME/Library/LaunchAgents"
-sed -e "s|__ANCHOR_SH__|$DIR/anchor.sh|g" -e "s|__DIR__|$DIR|g" "$TEMPLATE" >"$TARGET"
+mkdir -p "$HOME_DIR"
+cp "$PLUGIN_DIR/anchor.sh" "$HOME_DIR/anchor.sh" && chmod +x "$HOME_DIR/anchor.sh"
+sed -e "s|__ANCHOR_SH__|$HOME_DIR/anchor.sh|g" -e "s|__DIR__|$HOME_DIR|g" "$TEMPLATE" >"$TARGET"
 plutil -lint "$TARGET"
 
 echo "==> (re)loading the LaunchAgent"
@@ -54,7 +70,7 @@ echo
 ADMIN_SCRIPT="/usr/bin/pmset repeat wake MTWRFSU $WAKE_TIME"
 if [ "${ANCHOR_INSTALL_SUDOERS:-1}" = "1" ]; then
   RENDERED="$DIR/.sudoers.rendered"
-  sed "s|__USER__|$(id -un)|g" "$DIR/sudoers.codex-anchor-mac.template" >"$RENDERED"
+  sed "s|__USER__|$(id -un)|g" "$PLUGIN_DIR/sudoers.codex-anchor-mac.template" >"$RENDERED"
   chmod 0600 "$RENDERED"
   # Letting the panel change the wake time later needs a narrow NOPASSWD rule.
   ADMIN_SCRIPT="$ADMIN_SCRIPT && /usr/bin/install -m 0440 -o root -g wheel '$RENDERED' /etc/sudoers.d/codex-anchor-mac"

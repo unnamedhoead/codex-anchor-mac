@@ -83,46 +83,49 @@ up at 4am.
 
 ## Install
 
+Inside Codex:
+
+```bash
+codex plugin marketplace add https://github.com/unnamedhoead/codex-anchor-mac.git
+codex plugin add codex-anchor-mac@codex-anchor-mac
+```
+
+Then ask Codex to open the anchor panel. Installing the plugin installs the
+daily job; there is nothing else to run. The first time the panel opens it
+creates `~/.codex-anchor/`, installs the launchd job, and offers to schedule
+the daily wake through the standard macOS authorization dialog. You can
+decline that last part: the job still runs, it is just late on nights the Mac
+is asleep on battery.
+
+Without Codex, the job works on its own, without a panel:
+
 ```bash
 git clone https://github.com/unnamedhoead/codex-anchor-mac.git ~/codex-anchor-mac
 cd ~/codex-anchor-mac && ./setup.sh
 ```
 
-That is the whole install. `setup.sh` sets up the job, starts the control
-panel and opens it in your browser.
-
-```bash
-./setup.sh --no-panel   # just the anchor job
-./setup.sh --no-wake    # skip the admin prompt entirely
-```
-
-Do **not** put the folder in `~/Documents`, `~/Desktop` or `~/Downloads`
-(see above). The installer will stop you.
-
-`install.sh` needs no privileges for the core job. It then offers to schedule a
-daily wake, which does need admin rights; it asks once through the standard
-macOS authorization dialog (Touch ID works). **You can decline** — the anchor
-still runs, it is just late on nights the Mac is asleep on battery. If your Mac
-stays awake on AC power, you do not need it at all.
-
-Set `ANCHOR_INSTALL_SUDOERS=0` to skip the narrow `sudoers` rule that lets the
-control panel change the wake time later without prompting.
+Both routes install into `~/.codex-anchor/`, so they share one log and one
+schedule.
 
 ## Control panel
 
 ![Control panel](docs/panel.png)
 
-`setup.sh` runs a small server on `http://127.0.0.1:7788` (localhost only)
-that lets you:
+The panel renders inside Codex, not in a browser. It lets you:
 
 - change the trigger time, in a timezone you pick
 - enable or disable the job
 - trigger a run manually
 - read the last 15 runs
 - switch the interface between English and 中文
+- repair the job if a plugin upgrade left a stale copy behind
 
-Changing the time keeps the launchd job, `install.sh` and the `pmset` wake in
+Changing the time keeps the launchd job, `config.json` and the `pmset` wake in
 sync, so they cannot drift apart.
+
+It reaches its backend through MCP tool calls rather than HTTP, because Codex
+blocks a sandboxed panel from reaching localhost even when the origin is
+declared ([openai/codex#45913](https://github.com/openai/codex/issues/45913)).
 
 ## Timezones
 
@@ -169,11 +172,12 @@ start a subscription window at all.
 ./test.sh
 ```
 
-28 smoke tests, all against a stub binary in a throwaway directory, so no real
+48 checks, all against a stub binary in a throwaway directory, so no real
 request is ever sent and no quota window is opened. They cover `anchor.sh`'s
 success, empty-output, failure, watchdog, missing-binary and locking paths, the
-timezone conversion, and the guards (TCC refusal, strict-XML plists, sudoers
-syntax). CI runs them on `macos-latest`.
+timezone conversion, the MCP protocol surface over stdio, and the guards (TCC
+refusal, strict-XML plists, sudoers syntax, manifest consistency, and a panel
+that references no external origin). CI runs them on `macos-latest`.
 
 ## Known limitations
 
