@@ -8,7 +8,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LABEL="io.github.codex-anchor-mac"
 TEMPLATE="$DIR/$LABEL.plist"
 TARGET="$HOME/Library/LaunchAgents/$LABEL.plist"
-WAKE_TIME="04:27:00"
+WAKE_TIME="18:07:00"
 
 [ -f "$TEMPLATE" ] || { echo "missing $TEMPLATE" >&2; exit 1; }
 
