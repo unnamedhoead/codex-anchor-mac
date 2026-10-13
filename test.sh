@@ -124,6 +124,11 @@ for f in "$PLUGIN_DIR"/io.github.codex-anchor-mac*.plist "$DIR"/io.github.codex-
   else no "$(basename "$f") parses as strict XML" "plutil is lenient; plistlib is not"; fi
 done
 
+PANEL="$PLUGIN_DIR/ui/dist/panel.html"
+if [ -s "$PANEL" ] && ! grep -qE 'src="http|href="http|fetch\(' "$PANEL"
+then ok "built panel references no external origin"
+else no "built panel references no external origin"; fi
+
 MKT="$DIR/.agents/plugins/marketplace.json"
 if /usr/bin/python3 -c "
 import json,pathlib

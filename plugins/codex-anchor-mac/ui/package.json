@@ -1,0 +1,17 @@
+{
+  "name": "codex-anchor-panel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "1.7.5"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.11",
+    "typescript": "5.9.3"
+  }
+}
