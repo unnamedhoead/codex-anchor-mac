@@ -4,9 +4,8 @@
 set -uo pipefail
 
 JOB="io.github.codex-anchor-mac"
-UI="io.github.codex-anchor-mac.ui"
 
-for label in "$UI" "$JOB"; do
+for label in "$JOB"; do
   if launchctl print "gui/$UID/$label" >/dev/null 2>&1; then
     launchctl bootout "gui/$UID/$label" 2>/dev/null && echo "unloaded $label"
   fi
@@ -24,4 +23,7 @@ if [ -f /etc/sudoers.d/codex-anchor-mac ]; then
 fi
 
 echo
-echo "Done. Logs and config.json are still in $(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "The Codex plugin is removed separately:"
+echo "  codex plugin remove codex-anchor-mac"
+echo
+echo "Done. Logs and config.json are still in $HOME/.codex-anchor"

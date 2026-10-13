@@ -75,42 +75,43 @@ anchor 时刻 = 起床时间 + 一个窗口能撑多久 − 5h
 
 ## 安装
 
+在 Codex 里：
+
+```bash
+codex plugin marketplace add https://github.com/unnamedhoead/codex-anchor-mac.git
+codex plugin add codex-anchor-mac@codex-anchor-mac
+```
+
+然后让 Codex 打开锚点面板。**装插件就等于装好了定时任务**，没有别的步骤。面板首次打开
+时会创建 `~/.codex-anchor/`、装好 launchd 任务，并通过 macOS 标准授权弹窗询问是否设置
+每日唤醒。最后这步**可以拒绝**：任务照常运行，只是在没插电、机器睡着的夜里会迟到。
+
+不用 Codex 的话，任务本身也能独立工作，只是没有面板：
+
 ```bash
 git clone https://github.com/unnamedhoead/codex-anchor-mac.git ~/codex-anchor-mac
 cd ~/codex-anchor-mac && ./setup.sh
 ```
 
-安装到此结束。`setup.sh` 会装好任务、启动控制面板，并在浏览器里打开它。
-
-```bash
-./setup.sh --no-panel   # 只装 anchor 任务
-./setup.sh --no-wake    # 完全跳过管理员授权
-```
-
-**不要**把文件夹放进 `~/Documents`、`~/Desktop` 或 `~/Downloads`（原因见上）。
-安装脚本会拦住你。
-
-`install.sh` 的核心任务不需要任何特权。之后它会询问是否设置每日定时唤醒——这一步需要
-管理员权限，通过 macOS 标准授权弹窗询问一次（支持 Touch ID）。**你可以拒绝**：anchor
-照常运行，只是在没插电、机器睡着的夜里会迟到。如果你的 Mac 接电源时不休眠，完全不需要
-这一步。
-
-设 `ANCHOR_INSTALL_SUDOERS=0` 可跳过那条窄作用域的 `sudoers` 规则（该规则的作用是让
-控制面板以后改时间时不必再次授权）。
+两条路都装进 `~/.codex-anchor/`，共用一份日志和一份计划。
 
 ## 控制面板
 
 ![控制面板](docs/panel.png)
 
-`setup.sh` 会在 `http://127.0.0.1:7788` 起一个小服务（仅监听 localhost），可以：
+面板渲染在 Codex 内部，不是浏览器。可以：
 
 - 改触发时间，时区自选
 - 启用或停用任务
 - 手动触发一次
 - 查看最近 15 次运行
 - 在 English 和中文之间切换界面语言
+- 插件升级后副本过期时，一键修复
 
-改时间会同时同步 launchd 任务、`install.sh` 和 `pmset` 唤醒，三者不会各自跑偏。
+改时间会同时同步 launchd 任务、`config.json` 和 `pmset` 唤醒，三者不会各自跑偏。
+
+面板通过 MCP 工具调用访问后端，而不是 HTTP——因为 Codex 会拦截沙箱面板对 localhost 的
+访问，即使显式声明了来源也一样（[openai/codex#45913](https://github.com/openai/codex/issues/45913)）。
 
 ## 时区
 
@@ -150,9 +151,10 @@ OpenAI API key 是单独计费的，走 API 根本不会启动订阅的窗口。
 ./test.sh
 ```
 
-28 条冒烟测试，全部针对临时目录里的桩二进制运行，**不会发出任何真实请求，也不会
+48 项检查，全部针对临时目录里的桩二进制运行，**不会发出任何真实请求，也不会
 开启额度窗口**。覆盖 `anchor.sh` 的成功 / 空输出 / 失败 / 看门狗 / 找不到二进制 /
-加锁等路径，时区换算，以及各项守卫（TCC 拒绝、plist 严格 XML、sudoers 语法）。
+加锁等路径，时区换算，stdio 上的 MCP 协议表面，以及各项守卫（TCC 拒绝、plist 严格 XML、
+sudoers 语法、清单一致性、面板不引用任何外部源）。
 CI 在 `macos-latest` 上运行。
 
 ## 已知限制

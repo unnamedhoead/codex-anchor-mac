@@ -76,37 +76,24 @@ if /usr/bin/python3 -c "import sys;open('$TMP/box/anchor.log','rb').read().decod
 then ok "log stays valid UTF-8 with CJK output"
 else no "log stays valid UTF-8 with CJK output"; fi
 
-# --- server.py ------------------------------------------------------------
-echo
-echo "server.py"
-
-is "compiles" "$( /usr/bin/python3 -m py_compile "$DIR/server.py" >/dev/null 2>&1; echo $? )" "0"
-
-TZOUT=$(/usr/bin/python3 - "$DIR" <<'PY'
-import sys, pathlib
-src = pathlib.Path(sys.argv[1], "server.py").read_text(encoding="utf-8")
-ns = {"__name__": "test", "__file__": str(pathlib.Path(sys.argv[1], "server.py"))}
-exec(compile(src, "server.py", "exec"), ns)
-# A zone that equals the system zone must round-trip unchanged.
-h, m = ns["to_local"](4, 30, ns["system_timezone"]())
-print(f"{h:02d}:{m:02d}")
-# An unknown zone must not raise.
-print("%02d:%02d" % ns["to_local"](4, 30, "Nowhere/Nothing"))
-# The wake lead must wrap past midnight rather than go negative.
-print("%02d:%02d" % ns["wake_time"](0, 1))
-PY
-)
-is "to_local is identity for the system zone" "$(echo "$TZOUT" | sed -n 1p)" "04:30"
-is "to_local tolerates an unknown zone"       "$(echo "$TZOUT" | sed -n 2p)" "04:30"
-is "wake_time wraps past midnight"            "$(echo "$TZOUT" | sed -n 3p)" "23:58"
-
 # --- anchor_core -----------------------------------------------------------
 echo
 echo "anchor_core"
-if /usr/bin/python3 "$PLUGIN_DIR/server/test_anchor_core.py" >/dev/null 2>&1
-then ok "anchor_core unit tests"; else no "anchor_core unit tests"; fi
-if /usr/bin/python3 "$PLUGIN_DIR/server/test_anchor_mcp.py" >/dev/null 2>&1
-then ok "anchor_mcp protocol tests"; else no "anchor_mcp protocol tests"; fi
+# Report each unittest case rather than the file, so the headline count
+# reflects what is actually covered instead of hiding it behind one line.
+run_unittests() {
+  local file="$1" label="$2" out
+  out="$(/usr/bin/python3 "$file" -v 2>&1)"
+  while IFS= read -r line; do
+    case "$line" in
+      *" ... ok")   ok "$label: ${line%% (*}" ;;
+      *" ... FAIL"|*" ... ERROR") no "$label: ${line%% (*}" ;;
+    esac
+  done <<<"$out"
+}
+
+run_unittests "$PLUGIN_DIR/server/test_anchor_core.py" "core"
+run_unittests "$PLUGIN_DIR/server/test_anchor_mcp.py" "mcp"
 
 # --- guards ---------------------------------------------------------------
 echo
@@ -117,8 +104,7 @@ OUT=$( cd "$HOME/Documents/.anchor-tcc-probe" && ./setup.sh --no-wake --no-panel
 rm -rf "$HOME/Documents/.anchor-tcc-probe"
 has "setup.sh refuses a TCC-protected folder" "$OUT" "TCC-protected"
 
-# The UI plist is still at the root until Task 7 retires it.
-for f in "$PLUGIN_DIR"/io.github.codex-anchor-mac*.plist "$DIR"/io.github.codex-anchor-mac*.plist; do
+for f in "$PLUGIN_DIR"/io.github.codex-anchor-mac*.plist; do
   if /usr/bin/python3 -c "import plistlib,sys;plistlib.load(open(sys.argv[1],'rb'))" "$f" 2>/dev/null
   then ok "$(basename "$f") parses as strict XML"
   else no "$(basename "$f") parses as strict XML" "plutil is lenient; plistlib is not"; fi

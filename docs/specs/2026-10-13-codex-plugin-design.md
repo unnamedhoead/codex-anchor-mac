@@ -1,6 +1,14 @@
 # Ship the control panel as a Codex plugin
 
-Status: approved design, not yet implemented
+Status: implemented 2026-10-13
+
+What the implementation did differently: the copy range for anchor_core ran to
+line 333 rather than 266, because set_schedule sits past the end of status();
+install.sh reads the schedule from config.json instead of holding a WAKE_TIME
+constant, and installs into ~/.codex-anchor, so the CLI and plugin routes share
+one home rather than silently keeping two; and test.sh reports each unittest
+case rather than each file, which took the headline count from 28 to 48 without
+adding coverage it did not already have.
 Date: 2026-10-13
 
 ## Intent
