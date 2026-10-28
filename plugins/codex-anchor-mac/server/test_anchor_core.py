@@ -3,6 +3,8 @@ import pathlib
 import os
 import sys
 import unittest
+import tempfile
+from unittest import mock
 
 # Before importing anchor_core: the suite runs on the same Mac the tool
 # schedules, and launchctl/pmset are system-global.
@@ -104,12 +106,68 @@ class HomeHealth(unittest.TestCase):
         self.assertIn("home", core.status())
 
 
+class WakeAuthorization(unittest.TestCase):
+    def test_sudo_success_needs_no_dialog(self):
+        with mock.patch.object(core, "run", return_value=(0, "")) as run:
+            self.assertEqual(core.schedule_wake(5, 59), (0, ""))
+        run.assert_called_once_with([
+            "sudo", "-n", "/usr/bin/pmset", "repeat", "wake", "MTWRFSU", "05:59:00"])
+
+    def test_password_required_opens_system_dialog(self):
+        with mock.patch.object(core, "run", side_effect=[
+                (1, "sudo: a password is required"), (0, "")]) as run:
+            self.assertEqual(core.schedule_wake(5, 59), (0, ""))
+        cmd = run.call_args.args[0]
+        self.assertEqual(cmd[:2], ["osascript", "-e"])
+        self.assertIn('do shell script "/usr/bin/pmset repeat wake MTWRFSU 05:59:00"', cmd[2])
+        self.assertIn("with administrator privileges", cmd[2])
+        self.assertEqual(run.call_args.kwargs, {"timeout": 120})
+
+    def test_cancellation_is_returned_as_failure(self):
+        with mock.patch.object(core, "run", side_effect=[
+                (1, "password required"), (1, "User canceled. (-128)")]):
+            self.assertEqual(core.schedule_wake(5, 59), (1, "User canceled. (-128)"))
+
+    def test_invalid_times_never_reach_privileged_commands(self):
+        with mock.patch.object(core, "run") as run:
+            for hour, minute in [(24, 0), (0, 60), (-1, 0), (True, 0), ("5; id", 0)]:
+                with self.assertRaises(ValueError):
+                    core.schedule_wake(hour, minute)
+            run.assert_not_called()
+
+    def test_schedule_change_uses_authorization_and_reports_partial_failure(self):
+        with tempfile.TemporaryDirectory() as folder:
+            installed = pathlib.Path(folder) / "installed.plist"
+            installed.write_bytes(core.plistlib.dumps({}))
+            template = pathlib.Path(folder) / "template.plist"
+            template.write_bytes(core.TEMPLATE.read_bytes())
+            with mock.patch.multiple(core, INSTALLED=installed, TEMPLATE=template), \
+                    mock.patch.object(core, "load_config", return_value={}), \
+                    mock.patch.object(core, "save_config"), \
+                    mock.patch.object(core, "to_local", return_value=(6, 2)), \
+                    mock.patch.object(core, "run", return_value=(0, "")), \
+                    mock.patch.object(core, "schedule_wake", return_value=(1, "User canceled. (-128)")) as wake:
+                steps = core.set_schedule(6, 2, "Asia/Shanghai")
+            wake.assert_called_once_with(5, 59)
+            step = next(s for s in steps if s["step"] == "update pmset wake")
+            self.assertFalse(step["ok"])
+            self.assertIn("User canceled", step["detail"])
+            self.assertIn("trigger time saved", step["detail"])
+
+    def test_run_passes_authorization_timeout_to_subprocess(self):
+        result = mock.Mock(returncode=0, stdout="", stderr="")
+        with mock.patch.object(core, "DRY_RUN", False), \
+                mock.patch.object(core.subprocess, "run", return_value=result) as run:
+            core.run(["osascript", "-e", "test"], timeout=120)
+        self.assertEqual(run.call_args.kwargs["timeout"], 120)
+
+
 class Install(unittest.TestCase):
     def test_declined_wake_still_reports_the_job_installed(self):
         # Review Focus 4: cancelling the admin dialog is not an install failure.
         import unittest.mock as mock
 
-        def fake_run(cmd):
+        def fake_run(cmd, **kwargs):
             if cmd[0] in ("sudo", "osascript"):
                 return 1, "User cancelled."
             return 0, ""

@@ -54,14 +54,37 @@ def _mutates(cmd: list[str]) -> bool:
     return True
 
 
-def run(cmd: list[str]) -> tuple[int, str]:
+def run(cmd: list[str], timeout: int = 30) -> tuple[int, str]:
     if DRY_RUN and cmd and _mutates(cmd):
         return 0, f"dry-run: {' '.join(cmd)}"
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except Exception as exc:  # noqa: BLE001 - surfaced to the UI verbatim
         return 1, f"{type(exc).__name__}: {exc}"
     return p.returncode, (p.stdout + p.stderr).strip()
+
+
+def schedule_wake(hour: int, minute: int) -> tuple[int, str]:
+    """Use macOS authorization when sudo cannot run unattended.
+
+    Only validated numeric times enter the privileged command. Do not install
+    a persistent sudoers rule just to change a user's wake schedule.
+    """
+    if type(hour) is not int or type(minute) is not int or not (
+            0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ValueError("wake time must be integers in 00:00-23:59")
+    wake_at = f"{hour:02d}:{minute:02d}:00"
+    rc, out = run(["sudo", "-n", "/usr/bin/pmset", "repeat", "wake",
+                   "MTWRFSU", wake_at])
+    if rc == 0:
+        return rc, out
+    shell = f"/usr/bin/pmset repeat wake MTWRFSU {wake_at}"
+    script = (
+        f"do shell script {json.dumps(shell)} with administrator privileges "
+        'with prompt "Codex Anchor needs to update the daily wake time"'
+    )
+    # Give the user time to read the system dialog and authorize it.
+    return run(["osascript", "-e", script], timeout=120)
 
 
 def system_timezone() -> str:
@@ -333,11 +356,11 @@ def set_schedule(hour: int, minute: int, tz_name: str) -> list[dict]:
     step("reload launchd", rc == 0, out)
     run(["launchctl", "enable", SERVICE])
 
-    # -n so a missing sudoers rule fails loudly instead of hanging on a prompt.
-    rc, out = run(["sudo", "-n", "pmset", "repeat", "wake", "MTWRFSU",
-                   f"{wh:02d}:{wm:02d}:00"])
+    rc, out = schedule_wake(wh, wm)
     step("update pmset wake", rc == 0,
-         out or (f"set to {wh:02d}:{wm:02d}" if rc == 0 else "needs the sudoers rule -- re-run ./setup.sh"))
+         f"set to {wh:02d}:{wm:02d}" if rc == 0 else
+         f"{out or 'administrator authorization failed'}; "
+         "trigger time saved, but daily wake was not updated")
     return steps
 
 
@@ -413,17 +436,11 @@ def install_home() -> dict:
          out or f"{local_h:02d}:{local_m:02d} system time")
 
     wh, wm = wake_time(local_h, local_m)
-    rc, out = run(["sudo", "-n", "pmset", "repeat", "wake", "MTWRFSU",
-                   f"{wh:02d}:{wm:02d}:00"])
-    if rc != 0:
-        shell = f"/usr/bin/pmset repeat wake MTWRFSU {wh:02d}:{wm:02d}:00"
-        rc, out = run(["osascript", "-e",
-                       f'do shell script "{shell}" with administrator '
-                       f'privileges with prompt "codex-anchor-mac needs to '
-                       f'schedule a daily wake"'])
+    rc, out = schedule_wake(wh, wm)
     step("schedule the daily wake", rc == 0,
          f"{wh:02d}:{wm:02d}" if rc == 0
-         else "declined; the job still runs, it is just late on battery nights")
+         else f"{out or 'administrator authorization failed'}; "
+         "the job still runs, but daily wake was not updated")
     return {"steps": steps, "status": status()}
 
 
